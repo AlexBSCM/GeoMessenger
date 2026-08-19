@@ -9,6 +9,7 @@ import 'services/notification_service.dart';
 import 'services/message_listener_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/contacts_screen.dart';
+import 'screens/add_contact_screen.dart';
 import 'screens/create_message_screen.dart';
 import 'screens/inbox_screen.dart';
 
@@ -66,6 +67,11 @@ class GeoMessengerApp extends StatelessWidget {
           final recipient = settings.arguments as AppUser;
           return MaterialPageRoute(
             builder: (_) => CreateMessageScreen(recipient: recipient),
+          );
+        }
+        if (settings.name == '/add-contact') {
+          return MaterialPageRoute(
+            builder: (_) => const AddContactScreen(),
           );
         }
         return null;

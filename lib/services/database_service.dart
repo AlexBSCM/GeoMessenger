@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message_model.dart';
 import '../models/user_model.dart';
+import '../models/contact_model.dart';
 
 class DatabaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -65,12 +66,56 @@ class DatabaseService {
     });
   }
 
-  Stream<List<AppUser>> getContacts(String userId) {
+  Stream<List<Contact>> getContacts(String userId) {
     return _firestore
-        .collection('users')
-        .where('id', isNotEqualTo: userId)
+        .collection('contacts')
+        .where('userId', isEqualTo: userId)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => AppUser.fromMap(doc.data())).toList());
+        .map((snapshot) => snapshot.docs.map((doc) => Contact.fromMap(doc.data())).toList());
+  }
+
+  Future<Set<String>> getContactIds(String userId) async {
+    final snapshot = await _firestore
+        .collection('contacts')
+        .where('userId', isEqualTo: userId)
+        .get();
+    return snapshot.docs
+        .map((doc) => doc.data()['contactId'] as String)
+        .toSet();
+  }
+
+  Future<void> addContact(String userId, AppUser user) async {
+    final contact = Contact(
+      userId: userId,
+      contactId: user.id,
+      contactName: user.name,
+      contactPhone: user.phone,
+    );
+    await _firestore
+        .collection('contacts')
+        .doc('${userId}_${user.id}')
+        .set(contact.toMap());
+  }
+
+  Future<void> removeContact(String userId, String contactId) async {
+    await _firestore.collection('contacts').doc('${userId}_$contactId').delete();
+  }
+
+  Future<void> setContactNickname(String userId, String contactId, String nickname) async {
+    await _firestore
+        .collection('contacts')
+        .doc('${userId}_$contactId')
+        .update({'nickname': nickname});
+  }
+
+  Future<List<AppUser>> searchUsers(String query) async {
+    final snapshot = await _firestore.collection('users').get();
+    final users = snapshot.docs.map((doc) => AppUser.fromMap(doc.data())).toList();
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return users;
+    return users
+        .where((u) => u.name.toLowerCase().contains(q) || u.phone.toLowerCase().contains(q))
+        .toList();
   }
 
   Future<AppUser?> getUser(String userId) async {
