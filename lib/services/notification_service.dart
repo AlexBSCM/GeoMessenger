@@ -39,7 +39,29 @@ class NotificationService {
     );
     const settings = InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _notifications.initialize(settings);
+    await _notifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
+
+  Future<void> showIncomingMessageNotification(GeoMessage message) async {
+    const androidDetails = AndroidNotificationDetails(
+      'geo_messages',
+      'Geo Messages',
+      channelDescription: 'Notifications when you receive a geo message',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const iosDetails = DarwinNotificationDetails();
+    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    await _notifications.show(
+      message.id.hashCode,
+      'New geo message from ${message.senderName}',
+      message.text,
+      details,
+    );
   }
 
   Future<void> saveToken() async {

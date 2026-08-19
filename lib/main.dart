@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'models/user_model.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
+import 'services/message_listener_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/create_message_screen.dart';
@@ -37,7 +38,12 @@ void main() async {
   await NotificationService().init();
 
   FirebaseAuth.instance.authStateChanges().listen((user) {
-    if (user != null) NotificationService().saveToken();
+    if (user != null) {
+      NotificationService().saveToken();
+      MessageListenerService.instance.start();
+    } else {
+      MessageListenerService.instance.stop();
+    }
   });
 
   runApp(const GeoMessengerApp());
