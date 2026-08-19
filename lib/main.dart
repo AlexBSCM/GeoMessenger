@@ -11,19 +11,24 @@ import 'screens/contacts_screen.dart';
 import 'screens/create_message_screen.dart';
 import 'screens/inbox_screen.dart';
 
+const bool useEmulator = bool.fromEnvironment('USE_EMULATOR', defaultValue: true);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: firebaseOptions);
 
-  // Connect to local emulators
-  try {
+  // Connect to local emulators (disable with --dart-define=USE_EMULATOR=false)
+  if (useEmulator) {
     await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
     FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
-  } catch (e) {
-    // Emulators already connected or not available
   }
 
   await NotificationService().init();
+
+  FirebaseAuth.instance.authStateChanges().listen((user) {
+    if (user != null) NotificationService().saveToken();
+  });
+
   runApp(const GeoMessengerApp());
 }
 

@@ -1,6 +1,31 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/message_model.dart';
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  final title = message.notification?.title ?? 'New Geo Message!';
+  final body = message.notification?.body ?? message.data['text'] ?? '';
+  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const settings = InitializationSettings(android: androidSettings);
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(settings);
+  const androidDetails = AndroidNotificationDetails(
+    'geo_messages',
+    'Geo Messages',
+    channelDescription: 'Notifications when you enter a geofence',
+    importance: Importance.high,
+    priority: Priority.high,
+  );
+  await plugin.show(
+    message.messageId.hashCode,
+    title,
+    body,
+    const NotificationDetails(android: androidDetails),
+  );
+}
 
 class NotificationService {
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
@@ -14,6 +39,15 @@ class NotificationService {
     );
     const settings = InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _notifications.initialize(settings);
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
+
+  Future<void> saveToken() async {
+    final token = await getFcmToken();
+    if (token == null) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'pushToken': token});
   }
 
   Future<void> showGeoMessageNotification(GeoMessage message) async {

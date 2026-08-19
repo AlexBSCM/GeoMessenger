@@ -15,7 +15,7 @@ class CreateMessageScreen extends StatefulWidget {
 
 class _CreateMessageScreenState extends State<CreateMessageScreen> {
   final _textController = TextEditingController();
-  final _locationService = LocationService();
+  final _locationService = LocationService.instance;
   final _db = DatabaseService();
   Position? _currentPosition;
   bool _isLoading = false;

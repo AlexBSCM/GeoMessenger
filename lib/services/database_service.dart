@@ -30,24 +30,22 @@ class DatabaseService {
     return id;
   }
 
-  Stream<GeoMessage> getIncomingMessages(String userId) {
+  Stream<List<GeoMessage>> getIncomingMessages(String userId) {
     return _firestore
         .collection('messages')
         .where('recipientId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList())
-        .asyncExpand((messages) => Stream.fromIterable(messages));
+        .map((snapshot) => snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList());
   }
 
-  Stream<GeoMessage> getSentMessages(String userId) {
+  Stream<List<GeoMessage>> getSentMessages(String userId) {
     return _firestore
         .collection('messages')
         .where('senderId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList())
-        .asyncExpand((messages) => Stream.fromIterable(messages));
+        .map((snapshot) => snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList());
   }
 
   Future<List<GeoMessage>> getActiveGeofences(String userId) async {

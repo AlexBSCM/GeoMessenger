@@ -1,7 +1,14 @@
+import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import '../models/message_model.dart';
 
 class LocationService {
+  LocationService._();
+  static final LocationService instance = LocationService._();
+
+  static StreamController<GeoMessage>? _controller;
+  static bool _monitoring = false;
+
   Future<bool> requestPermission() async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) return false;
@@ -21,27 +28,48 @@ class LocationService {
     );
   }
 
-  Stream<GeoMessage> startGeofenceMonitoring(List<GeoMessage> messages) async* {
+  Stream<GeoMessage> startGeofenceMonitoring(Future<List<GeoMessage>> Function() fetcher) {
+    if (_monitoring) {
+      return _controller!.stream;
+    }
+    _monitoring = true;
+    _controller = StreamController<GeoMessage>();
+    _runLoop(fetcher);
+    return _controller!.stream;
+  }
+
+  Future<void> _runLoop(Future<List<GeoMessage>> Function() fetcher) async {
     while (true) {
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
+      try {
+        final hasPermission = await requestPermission();
+        if (!hasPermission) {
+          await Future.delayed(const Duration(seconds: 30));
+          continue;
+        }
 
-      for (final message in messages) {
-        if (message.status != 'pending') continue;
-
-        final distance = Geolocator.distanceBetween(
-          position.latitude,
-          position.longitude,
-          message.latitude,
-          message.longitude,
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
         );
 
-        if (distance <= message.radiusMeters) {
-          yield message;
+        final messages = await fetcher();
+        for (final message in messages) {
+          if (message.status != 'pending') continue;
+
+          final distance = Geolocator.distanceBetween(
+            position.latitude,
+            position.longitude,
+            message.latitude,
+            message.longitude,
+          );
+
+          if (distance <= message.radiusMeters) {
+            _controller!.add(message);
+          }
         }
+      } catch (_) {
+        // Transient errors (e.g. GPS temporarily unavailable) — retry next cycle
       }
 
       await Future.delayed(const Duration(seconds: 30));

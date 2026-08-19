@@ -14,7 +14,7 @@ class InboxScreen extends StatefulWidget {
 
 class _InboxScreenState extends State<InboxScreen> {
   final _db = DatabaseService();
-  final _locationService = LocationService();
+  final _locationService = LocationService.instance;
   final _notificationService = NotificationService();
 
   @override
@@ -25,13 +25,12 @@ class _InboxScreenState extends State<InboxScreen> {
 
   Future<void> _startGeofenceMonitoring() async {
     final userId = FirebaseAuth.instance.currentUser!.uid;
-    final activeMessages = await _db.getActiveGeofences(userId);
-    if (activeMessages.isEmpty) return;
-
     final hasPermission = await _locationService.requestPermission();
     if (!hasPermission) return;
 
-    _locationService.startGeofenceMonitoring(activeMessages).listen((message) async {
+    _locationService
+        .startGeofenceMonitoring(() => _db.getActiveGeofences(userId))
+        .listen((message) async {
       await _db.markDelivered(message.id);
       await _notificationService.showGeoMessageNotification(message);
     });
