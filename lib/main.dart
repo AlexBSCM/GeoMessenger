@@ -12,6 +12,7 @@ import 'screens/create_message_screen.dart';
 import 'screens/inbox_screen.dart';
 
 const bool useEmulator = bool.fromEnvironment('USE_EMULATOR', defaultValue: true);
+const String emulatorHost = String.fromEnvironment('EMULATOR_HOST', defaultValue: 'localhost');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,8 +20,18 @@ void main() async {
 
   // Connect to local emulators (disable with --dart-define=USE_EMULATOR=false)
   if (useEmulator) {
-    await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
-    FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+    // automaticHostMapping=false: keep the exact host. On a real device the
+    // Firebase emulators are reached via `adb reverse` through localhost.
+    await FirebaseAuth.instance.useAuthEmulator(
+      emulatorHost,
+      9099,
+      automaticHostMapping: false,
+    );
+    FirebaseFirestore.instance.useFirestoreEmulator(
+      emulatorHost,
+      8080,
+      automaticHostMapping: false,
+    );
   }
 
   await NotificationService().init();
