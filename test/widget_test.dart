@@ -32,7 +32,7 @@ void main() {
       expect(restored.status, 'pending');
     });
 
-    test('defaults: radius 100m and pending status', () {
+    test('defaults: radius 5m and pending status', () {
       final message = GeoMessage(
         id: 'm2',
         senderId: 's1',
@@ -43,7 +43,7 @@ void main() {
         longitude: 2,
       );
 
-      expect(message.radiusMeters, 100);
+      expect(message.radiusMeters, 5);
       expect(message.status, 'pending');
     });
   });

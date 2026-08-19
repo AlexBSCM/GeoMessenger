@@ -5,7 +5,7 @@ import '../models/user_model.dart';
 
 class DatabaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static const _radiusMeters = 100.0;
+  static const _defaultRadiusMeters = 5.0;
 
   Future<String> createMessage({
     required String senderId,
@@ -14,6 +14,7 @@ class DatabaseService {
     required String text,
     required double latitude,
     required double longitude,
+    double radiusMeters = _defaultRadiusMeters,
   }) async {
     final id = const Uuid().v4();
     final message = GeoMessage(
@@ -24,7 +25,7 @@ class DatabaseService {
       text: text,
       latitude: latitude,
       longitude: longitude,
-      radiusMeters: _radiusMeters,
+      radiusMeters: radiusMeters,
     );
     await _firestore.collection('messages').doc(id).set(message.toMap());
     return id;
