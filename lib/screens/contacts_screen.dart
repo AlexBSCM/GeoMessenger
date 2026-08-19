@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
+import '../services/auth_service.dart';
 import '../services/database_service.dart';
 
 class ContactsScreen extends StatelessWidget {
   const ContactsScreen({super.key});
+
+  Future<void> _logout(BuildContext context) async {
+    await AuthService().signOut();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,7 +17,16 @@ class ContactsScreen extends StatelessWidget {
     final db = DatabaseService();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Contacts')),
+      appBar: AppBar(
+        title: const Text('Contacts'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Log out',
+            onPressed: () => _logout(context),
+          ),
+        ],
+      ),
       body: StreamBuilder<List<AppUser>>(
         stream: db.getContacts(userId),
         builder: (context, snapshot) {

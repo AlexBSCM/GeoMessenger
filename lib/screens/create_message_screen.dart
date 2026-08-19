@@ -36,7 +36,11 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     final appUser = await _db.getUser(user.uid);
-    setState(() => _senderName = appUser?.name ?? user.email ?? 'Unknown');
+    setState(() {
+      _senderName = (appUser?.name.isNotEmpty == true)
+          ? appUser!.name
+          : (user.email?.split('@').first ?? 'Unknown');
+    });
   }
 
   Future<void> _getInitialPosition() async {

@@ -9,8 +9,10 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // Fast login for local dev — any email, any password
-  Future<AppUser?> signInWithEmail(String email, String password) async {
+  // Login/password auth. Firebase Auth requires an email, so a synthetic
+  // email is derived from the login: "mylogin@geomesenger.local".
+  Future<AppUser> signInWithLogin(String login, String password) async {
+    final email = normalizeLogin(login);
     try {
       final cred = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -25,45 +27,42 @@ class AuthService {
         );
         return _createOrGetUser(cred.user!);
       }
-      return null;
+      rethrow;
     }
   }
 
-  // Phone auth (works with emulator: any phone + any 6-digit code)
-  Future<void> sendPhoneCode(String phoneNumber) async {
-    await _auth.verifyPhoneNumber(
-      phoneNumber: phoneNumber,
-      verificationCompleted: (credential) async {
-        await _auth.signInWithCredential(credential);
-      },
-      verificationFailed: (e) {},
-      codeSent: (vid, _) => _verificationId = vid,
-      codeAutoRetrievalTimeout: (vid) => _verificationId = vid,
-    );
-  }
-
-  Future<AppUser?> verifyPhoneCode(String smsCode) async {
-    if (_verificationId == null) return null;
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: _verificationId!,
-        smsCode: smsCode,
-      );
-      final userCredential = await _auth.signInWithCredential(credential);
-      return _createOrGetUser(userCredential.user!);
-    } catch (e) {
-      return null;
-    }
+  static String normalizeLogin(String login) {
+    final cleaned =
+        login.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9._]'), '');
+    return '${cleaned.isEmpty ? 'user' : cleaned}@geomesenger.local';
   }
 
   Future<AppUser> _createOrGetUser(User firebaseUser) async {
     final doc = await _firestore.collection('users').doc(firebaseUser.uid).get();
     if (doc.exists) {
-      return AppUser.fromMap(doc.data()!);
+      final existing = AppUser.fromMap(doc.data()!);
+      if (existing.name.isEmpty) {
+        final displayName = firebaseUser.displayName ??
+            firebaseUser.email?.split('@').first ??
+            firebaseUser.phoneNumber ??
+            'User';
+        await _firestore.collection('users').doc(firebaseUser.uid).update({'name': displayName});
+        return AppUser(
+          id: existing.id,
+          name: displayName,
+          phone: existing.phone,
+          pushToken: existing.pushToken,
+        );
+      }
+      return existing;
     }
+    final displayName = firebaseUser.displayName ??
+        firebaseUser.email?.split('@').first ??
+        firebaseUser.phoneNumber ??
+        'User';
     final appUser = AppUser(
       id: firebaseUser.uid,
-      name: '',
+      name: displayName,
       phone: firebaseUser.phoneNumber ?? firebaseUser.email ?? '',
     );
     await _firestore.collection('users').doc(appUser.id).set(appUser.toMap());
@@ -81,6 +80,4 @@ class AuthService {
   }
 
   Future<void> signOut() async => await _auth.signOut();
-
-  String? _verificationId;
 }

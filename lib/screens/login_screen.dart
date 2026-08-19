@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -10,44 +11,56 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _auth = AuthService();
-  final _emailController = TextEditingController(text: 'test@test.com');
+  final _loginController = TextEditingController(text: 'test');
   final _passController = TextEditingController(text: '123456');
-  final _phoneController = TextEditingController();
-  final _codeController = TextEditingController();
-  bool _usePhone = false;
-  bool _codeSent = false;
   bool _loading = false;
 
-  Future<void> _loginWithEmail() async {
-    setState(() => _loading = true);
-    await _auth.signInWithEmail(
-      _emailController.text.trim(),
-      _passController.text.trim(),
-    );
-    setState(() => _loading = false);
+  String _errorMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Wrong password';
+      case 'user-not-found':
+      case 'invalid-email':
+        return 'Invalid login';
+      case 'weak-password':
+        return 'Password must be at least 6 characters';
+      case 'network-request-failed':
+        return 'Network error. Is the emulator running?';
+      default:
+        return 'Login failed (${e.code})';
+    }
   }
 
-  Future<void> _sendCode() async {
-    setState(() => _loading = true);
-    await _auth.sendPhoneCode(_phoneController.text.trim());
-    setState(() {
-      _codeSent = true;
-      _loading = false;
-    });
-  }
+  Future<void> _login() async {
+    final login = _loginController.text.trim();
+    final password = _passController.text;
+    if (login.isEmpty || password.isEmpty) return;
 
-  Future<void> _verifyCode() async {
     setState(() => _loading = true);
-    await _auth.verifyPhoneCode(_codeController.text.trim());
-    setState(() => _loading = false);
+    try {
+      await _auth.signInWithLogin(login, password);
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_errorMessage(e))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Login failed')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _loginController.dispose();
     _passController.dispose();
-    _phoneController.dispose();
-    _codeController.dispose();
     super.dispose();
   }
 
@@ -62,80 +75,41 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Text('Welcome!', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 24),
-            if (!_usePhone) ...[
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+            TextField(
+              controller: _loginController,
+              decoration: const InputDecoration(
+                labelText: 'Login',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _passController,
-                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-                obscureText: true,
+              autocorrect: false,
+              textCapitalization: TextCapitalization.none,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _passController,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _loginWithEmail,
-                  child: _loading
-                      ? const CircularProgressIndicator()
-                      : const Text('Login / Register'),
-                ),
+              obscureText: true,
+              onSubmitted: (_) => _login(),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _loading ? null : _login,
+                child: _loading
+                    ? const CircularProgressIndicator()
+                    : const Text('Login / Register'),
               ),
-            ] else ...[
-              TextField(
-                controller: _phoneController,
-                decoration: const InputDecoration(
-                  labelText: 'Phone',
-                  hintText: '+11111111111',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.phone,
-              ),
-              const SizedBox(height: 12),
-              if (_codeSent) ...[
-                TextField(
-                  controller: _codeController,
-                  decoration: const InputDecoration(
-                    labelText: 'SMS Code',
-                    hintText: '123456',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _loading ? null : _verifyCode,
-                    child: _loading
-                        ? const CircularProgressIndicator()
-                        : const Text('Verify Code'),
-                  ),
-                ),
-              ] else ...[
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _loading ? null : _sendCode,
-                    child: _loading
-                        ? const CircularProgressIndicator()
-                        : const Text('Send Code'),
-                  ),
-                ),
-              ],
-            ],
-            const SizedBox(height: 24),
-            TextButton(
-              onPressed: () => setState(() {
-                _usePhone = !_usePhone;
-                _codeSent = false;
-              }),
-              child: Text(_usePhone ? 'Use Email instead' : 'Use Phone instead'),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'New here? Just enter a login and password — an account will be created automatically.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
