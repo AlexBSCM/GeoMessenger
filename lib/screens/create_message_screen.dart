@@ -23,7 +23,7 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
   LatLng? _selectedPoint;
   bool _isLoading = false;
   String _senderName = '';
-  static const double _radiusMeters = 5;
+  static const double _radiusMeters = 10;
 
   @override
   void initState() {
@@ -177,7 +177,7 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Radius: 5m (minimal) — triggers when recipient is basically at the point',
+                  'Radius: 10m — triggers when the recipient is close to the point',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 12),

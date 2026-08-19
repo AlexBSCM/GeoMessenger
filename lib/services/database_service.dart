@@ -5,7 +5,7 @@ import '../models/user_model.dart';
 
 class DatabaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  static const _defaultRadiusMeters = 5.0;
+  static const _defaultRadiusMeters = 10.0;
 
   Future<String> createMessage({
     required String senderId,

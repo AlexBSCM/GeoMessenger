@@ -18,7 +18,7 @@ class GeoMessage {
     required this.text,
     required this.latitude,
     required this.longitude,
-    this.radiusMeters = 5,
+    this.radiusMeters = 10,
     DateTime? createdAt,
     this.status = 'pending',
   }) : createdAt = createdAt ?? DateTime.now();
@@ -44,7 +44,7 @@ class GeoMessage {
         text: map['text'] as String,
         latitude: (map['latitude'] as num).toDouble(),
         longitude: (map['longitude'] as num).toDouble(),
-        radiusMeters: (map['radiusMeters'] as num?)?.toDouble() ?? 5,
+        radiusMeters: (map['radiusMeters'] as num?)?.toDouble() ?? 10,
         createdAt: DateTime.parse(map['createdAt'] as String),
         status: map['status'] as String? ?? 'pending',
       );
