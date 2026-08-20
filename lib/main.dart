@@ -6,7 +6,8 @@ import 'firebase_options.dart';
 import 'models/user_model.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
-import 'services/message_listener_service.dart';
+import 'services/database_service.dart';
+import 'services/location_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/add_contact_screen.dart';
@@ -41,9 +42,19 @@ void main() async {
   FirebaseAuth.instance.authStateChanges().listen((user) {
     if (user != null) {
       NotificationService().saveToken();
-      MessageListenerService.instance.start();
+      // Geofence monitoring is global: the recipient is notified (and the
+      // message is revealed) only once they enter the geo-zone around the
+      // message point, regardless of which tab is open.
+      LocationService.instance.stop();
+      LocationService.instance
+          .startGeofenceMonitoring(
+              () => DatabaseService().getActiveGeofences(user.uid))
+          .listen((message) async {
+        await DatabaseService().markDelivered(message.id);
+        await NotificationService().showGeoMessageNotification(message);
+      });
     } else {
-      MessageListenerService.instance.stop();
+      LocationService.instance.stop();
     }
   });
 

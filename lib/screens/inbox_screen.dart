@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/message_model.dart';
 import '../services/database_service.dart';
-import '../services/location_service.dart';
-import '../services/notification_service.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -14,26 +12,10 @@ class InboxScreen extends StatefulWidget {
 
 class _InboxScreenState extends State<InboxScreen> {
   final _db = DatabaseService();
-  final _locationService = LocationService.instance;
-  final _notificationService = NotificationService();
 
   @override
   void initState() {
     super.initState();
-    _startGeofenceMonitoring();
-  }
-
-  Future<void> _startGeofenceMonitoring() async {
-    final userId = FirebaseAuth.instance.currentUser!.uid;
-    final hasPermission = await _locationService.requestPermission();
-    if (!hasPermission) return;
-
-    _locationService
-        .startGeofenceMonitoring(() => _db.getActiveGeofences(userId))
-        .listen((message) async {
-      await _db.markDelivered(message.id);
-      await _notificationService.showGeoMessageNotification(message);
-    });
   }
 
   @override
@@ -62,7 +44,11 @@ class _InboxScreenState extends State<InboxScreen> {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final messages = snapshot.data as List<GeoMessage>;
+          // Only messages that reached the recipient (geofence triggered) are
+          // shown; pending ones stay hidden until the recipient enters the zone.
+          final messages = (snapshot.data as List<GeoMessage>)
+              .where((m) => m.status == 'delivered')
+              .toList();
           if (messages.isEmpty) {
             return const Center(child: Text('No messages yet'));
           }

@@ -8,6 +8,7 @@ class LocationService {
 
   static StreamController<GeoMessage>? _controller;
   static bool _monitoring = false;
+  static bool _stopped = false;
 
   Future<bool> requestPermission() async {
     // Note: Geolocator.isLocationServiceEnabled() is intentionally not used:
@@ -34,13 +35,21 @@ class LocationService {
       return _controller!.stream;
     }
     _monitoring = true;
-    _controller = StreamController<GeoMessage>();
+    _stopped = false;
+    _controller = StreamController<GeoMessage>.broadcast();
     _runLoop(fetcher);
     return _controller!.stream;
   }
 
+  void stop() {
+    _stopped = true;
+    _monitoring = false;
+    _controller?.close();
+    _controller = null;
+  }
+
   Future<void> _runLoop(Future<List<GeoMessage>> Function() fetcher) async {
-    while (true) {
+    while (!_stopped) {
       try {
         final hasPermission = await requestPermission();
         if (!hasPermission) {
