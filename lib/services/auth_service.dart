@@ -11,7 +11,21 @@ class AuthService {
 
   // Login/password auth. Firebase Auth requires an email, so a synthetic
   // email is derived from the login: "mylogin@geomesenger.local".
+  static const Set<String> allowedLogins = {'poco', '14ultra'};
+
+  static bool isAllowed(String login) {
+    final cleaned =
+        login.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9._]'), '');
+    return allowedLogins.contains(cleaned);
+  }
+
   Future<AppUser> signInWithLogin(String login, String password) async {
+    if (!isAllowed(login)) {
+      throw FirebaseAuthException(
+        code: 'account-not-allowed',
+        message: 'This login is not allowed yet',
+      );
+    }
     final email = normalizeLogin(login);
     try {
       final cred = await _auth.createUserWithEmailAndPassword(

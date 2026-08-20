@@ -11,9 +11,10 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _auth = AuthService();
-  final _loginController = TextEditingController(text: 'test');
+  final _loginController = TextEditingController();
   final _passController = TextEditingController(text: '123456');
   bool _loading = false;
+  bool _obscurePass = true;
 
   String _errorMessage(FirebaseAuthException e) {
     switch (e.code) {
@@ -23,6 +24,8 @@ class _LoginScreenState extends State<LoginScreen> {
       case 'user-not-found':
       case 'invalid-email':
         return 'Invalid login';
+      case 'account-not-allowed':
+        return 'This login is not allowed yet';
       case 'weak-password':
         return 'Password must be at least 6 characters';
       case 'network-request-failed':
@@ -87,11 +90,16 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: _passController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Password',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscurePass ? Icons.visibility_off : Icons.visibility),
+                  tooltip: _obscurePass ? 'Show password' : 'Hide password',
+                  onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                ),
               ),
-              obscureText: true,
+              obscureText: _obscurePass,
               onSubmitted: (_) => _login(),
             ),
             const SizedBox(height: 16),
