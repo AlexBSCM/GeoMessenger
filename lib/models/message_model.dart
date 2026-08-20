@@ -1,8 +1,9 @@
 class GeoMessage {
   final String id;
-  final String senderId;
+final String senderId;
   final String senderName;
   final String recipientId;
+  final String recipientName;
   final String text;
   final double latitude;
   final double longitude;
@@ -15,6 +16,7 @@ class GeoMessage {
     required this.senderId,
     required this.senderName,
     required this.recipientId,
+    this.recipientName = '',
     required this.text,
     required this.latitude,
     required this.longitude,
@@ -28,6 +30,7 @@ class GeoMessage {
         'senderId': senderId,
         'senderName': senderName,
         'recipientId': recipientId,
+        'recipientName': recipientName,
         'text': text,
         'latitude': latitude,
         'longitude': longitude,
@@ -41,6 +44,7 @@ class GeoMessage {
         senderId: map['senderId'] as String,
         senderName: map['senderName'] as String,
         recipientId: map['recipientId'] as String,
+        recipientName: map['recipientName'] as String? ?? '',
         text: map['text'] as String,
         latitude: (map['latitude'] as num).toDouble(),
         longitude: (map['longitude'] as num).toDouble(),

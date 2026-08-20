@@ -12,6 +12,7 @@ class DatabaseService {
     required String senderId,
     required String senderName,
     required String recipientId,
+    required String recipientName,
     required String text,
     required double latitude,
     required double longitude,
@@ -23,6 +24,7 @@ class DatabaseService {
       senderId: senderId,
       senderName: senderName,
       recipientId: recipientId,
+      recipientName: recipientName,
       text: text,
       latitude: latitude,
       longitude: longitude,
@@ -30,6 +32,26 @@ class DatabaseService {
     );
     await _firestore.collection('messages').doc(id).set(message.toMap());
     return id;
+  }
+
+  Future<void> updateMessage(
+    String messageId, {
+    required String text,
+    required double latitude,
+    required double longitude,
+    required double radiusMeters,
+  }) async {
+    await _firestore.collection('messages').doc(messageId).update({
+      'text': text,
+      'latitude': latitude,
+      'longitude': longitude,
+      'radiusMeters': radiusMeters,
+      'editedAt': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> deleteMessage(String messageId) async {
+    await _firestore.collection('messages').doc(messageId).delete();
   }
 
   Stream<List<GeoMessage>> getIncomingMessages(String userId) {

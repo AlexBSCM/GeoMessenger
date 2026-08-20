@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'models/user_model.dart';
+import 'models/message_model.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
@@ -13,6 +14,7 @@ import 'screens/contacts_screen.dart';
 import 'screens/add_contact_screen.dart';
 import 'screens/create_message_screen.dart';
 import 'screens/inbox_screen.dart';
+import 'screens/sent_screen.dart';
 
 const bool useEmulator = bool.fromEnvironment('USE_EMULATOR', defaultValue: true);
 const String emulatorHost = String.fromEnvironment('EMULATOR_HOST', defaultValue: 'localhost');
@@ -75,7 +77,13 @@ class GeoMessengerApp extends StatelessWidget {
       home: const AuthGate(),
       onGenerateRoute: (settings) {
         if (settings.name == '/create') {
-          final recipient = settings.arguments as AppUser;
+          final arg = settings.arguments;
+          if (arg is GeoMessage) {
+            return MaterialPageRoute(
+              builder: (_) => CreateMessageScreen(editMessage: arg),
+            );
+          }
+          final recipient = arg as AppUser;
           return MaterialPageRoute(
             builder: (_) => CreateMessageScreen(recipient: recipient),
           );
@@ -126,6 +134,7 @@ class _MainShellState extends State<MainShell> {
   final _screens = const [
     ContactsScreen(),
     InboxScreen(),
+    SentScreen(),
   ];
 
   @override
@@ -138,6 +147,7 @@ class _MainShellState extends State<MainShell> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.people), label: 'Contacts'),
           NavigationDestination(icon: Icon(Icons.inbox), label: 'Inbox'),
+          NavigationDestination(icon: Icon(Icons.outbox), label: 'Sent'),
         ],
       ),
     );

@@ -2,34 +2,51 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../models/message_model.dart';
 import '../models/user_model.dart';
 import '../services/database_service.dart';
 import '../services/location_service.dart';
 
 class CreateMessageScreen extends StatefulWidget {
-  final AppUser recipient;
-  const CreateMessageScreen({super.key, required this.recipient});
+  final AppUser? recipient;
+  final GeoMessage? editMessage;
+
+  const CreateMessageScreen({super.key, this.recipient, this.editMessage})
+      : assert(recipient != null || editMessage != null,
+            'Either recipient or editMessage must be provided');
+
+  bool get isEditing => editMessage != null;
 
   @override
   State<CreateMessageScreen> createState() => _CreateMessageScreenState();
 }
 
 class _CreateMessageScreenState extends State<CreateMessageScreen> {
-  final _textController = TextEditingController();
+  static const List<double> _radiusOptions = [5, 10, 25, 50, 100];
+
+  late final TextEditingController _textController;
   final _locationService = LocationService.instance;
   final _db = DatabaseService();
   final _mapController = MapController();
 
   LatLng? _selectedPoint;
+  late double _radiusMeters;
   bool _isLoading = false;
   String _senderName = '';
-  static const double _radiusMeters = 10;
 
   @override
   void initState() {
     super.initState();
+    final edit = widget.editMessage;
+    _textController = TextEditingController(text: edit?.text ?? '');
+    _radiusMeters = edit?.radiusMeters ?? 10;
+    if (edit != null) {
+      _selectedPoint = LatLng(edit.latitude, edit.longitude);
+    }
     _loadSender();
-    _getInitialPosition();
+    if (edit == null) {
+      _getInitialPosition();
+    }
   }
 
   Future<void> _loadSender() async {
@@ -62,22 +79,38 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
     _mapController.move(point, 17);
   }
 
-  Future<void> _sendMessage() async {
+  Future<void> _save() async {
     final text = _textController.text.trim();
     if (text.isEmpty || _selectedPoint == null) return;
 
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser!;
 
-    await _db.createMessage(
-      senderId: user.uid,
-      senderName: _senderName,
-      recipientId: widget.recipient.id,
-      text: text,
-      latitude: _selectedPoint!.latitude,
-      longitude: _selectedPoint!.longitude,
-      radiusMeters: _radiusMeters,
-    );
+    try {
+      final edit = widget.editMessage;
+      if (edit != null) {
+        await _db.updateMessage(
+          edit.id,
+          text: text,
+          latitude: _selectedPoint!.latitude,
+          longitude: _selectedPoint!.longitude,
+          radiusMeters: _radiusMeters,
+        );
+      } else {
+        await _db.createMessage(
+          senderId: user.uid,
+          senderName: _senderName,
+          recipientId: widget.recipient!.id,
+          recipientName: widget.recipient!.name,
+          text: text,
+          latitude: _selectedPoint!.latitude,
+          longitude: _selectedPoint!.longitude,
+          radiusMeters: _radiusMeters,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
 
     if (mounted) {
       Navigator.pop(context);
@@ -93,8 +126,13 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final edit = widget.editMessage;
+    final title = edit != null
+        ? 'Edit message to ${edit.recipientName.isEmpty ? 'recipient' : edit.recipientName}'
+        : 'Message to ${widget.recipient!.name}';
+
     return Scaffold(
-      appBar: AppBar(title: Text('Message to ${widget.recipient.name}')),
+      appBar: AppBar(title: Text(title)),
       body: Column(
         children: [
           Expanded(
@@ -157,6 +195,18 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
                   maxLines: 2,
                 ),
                 const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final r in _radiusOptions)
+                      ChoiceChip(
+                        label: Text('${r.toInt()}m'),
+                        selected: _radiusMeters == r,
+                        onSelected: (_) => setState(() => _radiusMeters = r),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Icon(
@@ -180,19 +230,21 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Radius: 10m — triggers when the recipient is close to the point',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                Text(
+                  'Radius: ${_radiusMeters.toInt()}m — triggers when the recipient is close to the point',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
                   height: 48,
                   child: ElevatedButton.icon(
-                    onPressed: (_isLoading || _selectedPoint == null) ? null : _sendMessage,
+                    onPressed: (_isLoading || _selectedPoint == null) ? null : _save,
                     icon: _isLoading
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.send),
-                    label: Text(_isLoading ? 'Sending...' : 'Send'),
+                        : Icon(edit != null ? Icons.save : Icons.send),
+                    label: Text(_isLoading
+                        ? (edit != null ? 'Saving...' : 'Sending...')
+                        : (edit != null ? 'Save changes' : 'Send')),
                   ),
                 ),
               ],
