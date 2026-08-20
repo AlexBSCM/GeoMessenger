@@ -10,6 +10,9 @@ class LocationService {
   static bool _monitoring = false;
   static bool _stopped = false;
 
+  static const _pollInterval = Duration(seconds: 3);
+  static const _fixTimeout = Duration(seconds: 8);
+
   Future<bool> requestPermission() async {
     // Note: Geolocator.isLocationServiceEnabled() is intentionally not used:
     // it hardcodes the GMS/FusedLocation path on Android and crashes on devices
@@ -22,12 +25,28 @@ class LocationService {
   }
 
   Future<Position> getCurrentPosition() async {
-    return await Geolocator.getCurrentPosition(
-      locationSettings: AndroidSettings(
-        accuracy: LocationAccuracy.high,
-        forceLocationManager: true,
-      ),
-    );
+    return await _getPosition();
+  }
+
+  // Prefer the fused provider (Google Play Services) for fast, accurate fixes on
+  // devices that support it. Devices without compatible Play Services (e.g. some
+  // Huawei tablets) fall back to the Android LocationManager instead of crashing.
+  static Future<Position> _getPosition() async {
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: AndroidSettings(
+          accuracy: LocationAccuracy.high,
+          forceLocationManager: false,
+        ),
+      ).timeout(_fixTimeout);
+    } catch (_) {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: AndroidSettings(
+          accuracy: LocationAccuracy.high,
+          forceLocationManager: true,
+        ),
+      ).timeout(_fixTimeout);
+    }
   }
 
   Stream<GeoMessage> startGeofenceMonitoring(Future<List<GeoMessage>> Function() fetcher) {
@@ -53,16 +72,11 @@ class LocationService {
       try {
         final hasPermission = await requestPermission();
         if (!hasPermission) {
-          await Future.delayed(const Duration(seconds: 30));
+          await Future.delayed(_pollInterval);
           continue;
         }
 
-        final position = await Geolocator.getCurrentPosition(
-          locationSettings: AndroidSettings(
-            accuracy: LocationAccuracy.high,
-            forceLocationManager: true,
-          ),
-        );
+        final position = await _getPosition();
 
         final messages = await fetcher();
         for (final message in messages) {
@@ -83,7 +97,7 @@ class LocationService {
         // Transient errors (e.g. GPS temporarily unavailable) — retry next cycle
       }
 
-      await Future.delayed(const Duration(seconds: 30));
+      await Future.delayed(_pollInterval);
     }
   }
 
