@@ -6,6 +6,7 @@ import '../models/message_model.dart';
 import '../models/user_model.dart';
 import '../services/database_service.dart';
 import '../services/location_service.dart';
+import '../services/map_state_service.dart';
 
 class CreateMessageScreen extends StatefulWidget {
   final AppUser? recipient;
@@ -45,8 +46,19 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
     }
     _loadSender();
     if (edit == null) {
-      _getInitialPosition();
+      _restoreOrInitPosition();
     }
+  }
+
+  Future<void> _restoreOrInitPosition() async {
+    final saved = await MapStateService.loadCenter();
+    if (saved != null) {
+      if (!mounted) return;
+      setState(() => _selectedPoint = saved);
+      _mapController.move(saved, 17);
+      return;
+    }
+    await _getInitialPosition();
   }
 
   Future<void> _loadSender() async {
@@ -76,6 +88,7 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
     if (!mounted) return;
     final point = LatLng(position.latitude, position.longitude);
     setState(() => _selectedPoint = point);
+    MapStateService.saveCenter(point);
     _mapController.move(point, 17);
   }
 
@@ -108,6 +121,7 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
           radiusMeters: _radiusMeters,
         );
       }
+      MapStateService.saveCenter(_selectedPoint!);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -143,7 +157,13 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
                 initialZoom: 17,
                 minZoom: 3,
                 maxZoom: 19,
-                onTap: (tapPosition, point) => setState(() => _selectedPoint = point),
+                onTap: (tapPosition, point) {
+                  setState(() => _selectedPoint = point);
+                  MapStateService.saveCenter(point);
+                },
+                onPositionChanged: (camera, hasGesture) {
+                  if (hasGesture) MapStateService.saveCenter(camera.center);
+                },
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
