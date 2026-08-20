@@ -10,8 +10,9 @@ class LocationService {
   static bool _monitoring = false;
   static bool _stopped = false;
 
-  static const _pollInterval = Duration(seconds: 3);
+  static const _streamInterval = Duration(seconds: 2);
   static const _fixTimeout = Duration(seconds: 8);
+  static const _retryDelay = Duration(seconds: 5);
 
   Future<bool> requestPermission() async {
     // Note: Geolocator.isLocationServiceEnabled() is intentionally not used:
@@ -67,17 +68,55 @@ class LocationService {
     _controller = null;
   }
 
+  // Continuous position stream: reacts to movement immediately instead of
+  // polling for fixes, so entering a zone fires as soon as the phone crosses it.
+  // Prefer the fused provider (Google Play Services); devices without it (e.g.
+  // some Huawei tablets) fall back to the Android LocationManager stream.
   Future<void> _runLoop(Future<List<GeoMessage>> Function() fetcher) async {
     while (!_stopped) {
+      final hasPermission = await requestPermission();
+      if (!hasPermission) {
+        await Future.delayed(_retryDelay);
+        continue;
+      }
+      if (_stopped) return;
+
       try {
-        final hasPermission = await requestPermission();
-        if (!hasPermission) {
-          await Future.delayed(_pollInterval);
-          continue;
-        }
+        await _monitorStream(fetcher);
+      } catch (_) {
+        // Stream failed (provider unavailable, GPS off) — restart in a moment.
+      }
+      if (_stopped) return;
+      await Future.delayed(_retryDelay);
+    }
+  }
 
-        final position = await _getPosition();
+  Future<void> _monitorStream(Future<List<GeoMessage>> Function() fetcher) async {
+    try {
+      await _listenStream(forceLocationManager: false, fetcher: fetcher);
+    } catch (_) {
+      if (_stopped) return;
+      // Fused provider unavailable — fall back to LocationManager.
+      await _listenStream(forceLocationManager: true, fetcher: fetcher);
+    }
+  }
 
+  Future<void> _listenStream({
+    required bool forceLocationManager,
+    required Future<List<GeoMessage>> Function() fetcher,
+  }) async {
+    final stream = Geolocator.getPositionStream(
+      locationSettings: AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        forceLocationManager: forceLocationManager,
+        intervalDuration: _streamInterval,
+      ),
+    );
+
+    await for (final position in stream) {
+      if (_stopped) break;
+
+      try {
         final messages = await fetcher();
         for (final message in messages) {
           if (message.status != 'pending') continue;
@@ -94,10 +133,8 @@ class LocationService {
           }
         }
       } catch (_) {
-        // Transient errors (e.g. GPS temporarily unavailable) — retry next cycle
+        // Transient errors (e.g. GPS temporarily unavailable) — keep listening.
       }
-
-      await Future.delayed(_pollInterval);
     }
   }
 
