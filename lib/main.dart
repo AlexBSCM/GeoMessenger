@@ -10,6 +10,7 @@ import 'services/notification_service.dart';
 import 'services/database_service.dart';
 import 'services/location_service.dart';
 import 'services/message_store.dart';
+import 'services/background_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/add_contact_screen.dart';
@@ -49,6 +50,9 @@ void main() async {
       // while online are revealed as soon as the recipient enters the point,
       // even without internet. Deliveries are synced to Firestore when online.
       MessageStore.instance.init(user.uid);
+      // Foreground service keeps the process (and the geofence loop) alive
+      // when the app is backgrounded or the screen is locked.
+      BackgroundService.instance.ensureStarted();
       LocationService.instance.stop();
       LocationService.instance
           .startGeofenceMonitoring(() async => MessageStore.instance.pendingMessages)
@@ -65,6 +69,7 @@ void main() async {
     } else {
       LocationService.instance.stop();
       MessageStore.instance.clear();
+      BackgroundService.instance.stop();
     }
   });
 
