@@ -9,6 +9,7 @@ import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
 import 'services/location_service.dart';
+import 'services/message_store.dart';
 import 'screens/login_screen.dart';
 import 'screens/contacts_screen.dart';
 import 'screens/add_contact_screen.dart';
@@ -44,19 +45,26 @@ void main() async {
   FirebaseAuth.instance.authStateChanges().listen((user) {
     if (user != null) {
       NotificationService().saveToken();
-      // Geofence monitoring is global: the recipient is notified (and the
-      // message is revealed) only once they enter the geo-zone around the
-      // message point, regardless of which tab is open.
+      // Local cache backs the geofence monitor: pending messages downloaded
+      // while online are revealed as soon as the recipient enters the point,
+      // even without internet. Deliveries are synced to Firestore when online.
+      MessageStore.instance.init(user.uid);
       LocationService.instance.stop();
       LocationService.instance
-          .startGeofenceMonitoring(
-              () => DatabaseService().getActiveGeofences(user.uid))
+          .startGeofenceMonitoring(() async => MessageStore.instance.pendingMessages)
           .listen((message) async {
-        await DatabaseService().markDelivered(message.id);
+        MessageStore.instance.revealLocally(message.id);
         await NotificationService().showGeoMessageNotification(message);
+        try {
+          await DatabaseService().markDelivered(message.id);
+          await MessageStore.instance.confirmDelivered(message.id);
+        } catch (_) {
+          // Offline — the delivery stays queued and syncs later.
+        }
       });
     } else {
       LocationService.instance.stop();
+      MessageStore.instance.clear();
     }
   });
 

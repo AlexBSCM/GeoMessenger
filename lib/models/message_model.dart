@@ -25,6 +25,25 @@ final String senderId;
     this.status = 'pending',
   }) : createdAt = createdAt ?? DateTime.now();
 
+  GeoMessage copyWith({
+    String? status,
+    DateTime? createdAt,
+    double? radiusMeters,
+  }) =>
+      GeoMessage(
+        id: id,
+        senderId: senderId,
+        senderName: senderName,
+        recipientId: recipientId,
+        recipientName: recipientName,
+        text: text,
+        latitude: latitude,
+        longitude: longitude,
+        radiusMeters: radiusMeters ?? this.radiusMeters,
+        createdAt: createdAt ?? this.createdAt,
+        status: status ?? this.status,
+      );
+
   Map<String, dynamic> toMap() => {
         'id': id,
         'senderId': senderId,
