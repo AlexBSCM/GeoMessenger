@@ -58,10 +58,12 @@ class DatabaseService {
   }
 
   Stream<List<GeoMessage>> getIncomingMessages(String userId) {
+    // No orderBy: the collection may contain documents with inconsistent
+    // createdAt types (string vs Timestamp) or missing the field, which makes
+    // any Firestore orderBy query fail for the whole stream. Sort in memory.
     return _firestore
         .collection('messages')
         .where('recipientId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList());
   }
@@ -70,7 +72,6 @@ class DatabaseService {
     return _firestore
         .collection('messages')
         .where('senderId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList());
   }

@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class GeoMessage {
   final String id;
-final String senderId;
+  final String senderId;
   final String senderName;
   final String recipientId;
   final String recipientName;
@@ -68,7 +70,15 @@ final String senderId;
         latitude: (map['latitude'] as num).toDouble(),
         longitude: (map['longitude'] as num).toDouble(),
         radiusMeters: (map['radiusMeters'] as num?)?.toDouble() ?? 10,
-        createdAt: DateTime.parse(map['createdAt'] as String),
+        createdAt: _parseCreatedAt(map['createdAt']),
         status: map['status'] as String? ?? 'pending',
       );
+
+  /// Accepts both ISO strings (what the app writes) and Firestore Timestamps
+  /// (older/imported documents) so a single inconsistent document does not
+  /// crash the whole inbox/sent stream.
+  static DateTime _parseCreatedAt(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    return DateTime.parse(value as String);
+  }
 }

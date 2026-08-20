@@ -123,6 +123,7 @@ class _SentScreenState extends State<SentScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           final messages = snapshot.data!;
+          messages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
           _currentMessages = messages;
           if (messages.isEmpty) {
             return const Center(child: Text('No sent messages yet'));
