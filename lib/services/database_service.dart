@@ -41,13 +41,16 @@ class DatabaseService {
     required double longitude,
     required double radiusMeters,
   }) async {
-    await _firestore.collection('messages').doc(messageId).update({
-      'text': text,
-      'latitude': latitude,
-      'longitude': longitude,
-      'radiusMeters': radiusMeters,
-      'editedAt': DateTime.now().toIso8601String(),
-    });
+    // Full-document write (see markDelivered for the reason).
+    final doc = await _firestore.collection('messages').doc(messageId).get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    data['text'] = text;
+    data['latitude'] = latitude;
+    data['longitude'] = longitude;
+    data['radiusMeters'] = radiusMeters;
+    data['editedAt'] = DateTime.now().toIso8601String();
+    await _firestore.collection('messages').doc(messageId).set(data);
   }
 
   Future<void> deleteMessage(String messageId) async {
@@ -82,10 +85,14 @@ class DatabaseService {
   }
 
   Future<void> markDelivered(String messageId) async {
-    await _firestore.collection('messages').doc(messageId).update({
-      'status': 'delivered',
-      'deliveredAt': DateTime.now().toIso8601String(),
-    });
+    // Full-document write: masked updates (update()) are rejected by the
+    // Firestore rules for this project, while a full write is allowed.
+    final doc = await _firestore.collection('messages').doc(messageId).get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    data['status'] = 'delivered';
+    data['deliveredAt'] = DateTime.now().toIso8601String();
+    await _firestore.collection('messages').doc(messageId).set(data);
   }
 
   Stream<List<Contact>> getContacts(String userId) {
