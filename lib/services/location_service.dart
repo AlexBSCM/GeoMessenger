@@ -10,9 +10,9 @@ class LocationService {
   static bool _monitoring = false;
 
   Future<bool> requestPermission() async {
-    final enabled = await Geolocator.isLocationServiceEnabled();
-    if (!enabled) return false;
-
+    // Note: Geolocator.isLocationServiceEnabled() is intentionally not used:
+    // it hardcodes the GMS/FusedLocation path on Android and crashes on devices
+    // with incompatible Google Play Services (e.g. some Huawei tablets).
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -22,8 +22,9 @@ class LocationService {
 
   Future<Position> getCurrentPosition() async {
     return await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
+      locationSettings: AndroidSettings(
         accuracy: LocationAccuracy.high,
+        forceLocationManager: true,
       ),
     );
   }
@@ -48,8 +49,9 @@ class LocationService {
         }
 
         final position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
+          locationSettings: AndroidSettings(
             accuracy: LocationAccuracy.high,
+            forceLocationManager: true,
           ),
         );
 
