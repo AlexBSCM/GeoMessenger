@@ -24,17 +24,17 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final nickname = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Contact nickname'),
+        title: const Text('Имя контакта'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Nickname'),
+          decoration: const InputDecoration(labelText: 'Имя'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
           TextButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Save'),
+            child: const Text('Сохранить'),
           ),
         ],
       ),
@@ -48,10 +48,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Remove ${contact.displayName}?'),
+        title: Text('Удалить ${contact.displayName}?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить')),
         ],
       ),
     );
@@ -75,16 +75,16 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Contacts'),
+        title: const Text('Контакты'),
         actions: [
           IconButton(
             icon: const Icon(Icons.person_add_alt),
-            tooltip: 'Add contact',
+            tooltip: 'Добавить контакт',
             onPressed: () => Navigator.pushNamed(context, '/add-contact'),
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Log out',
+            tooltip: 'Выйти',
             onPressed: () => _logout(context),
           ),
         ],
@@ -93,7 +93,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
         stream: _db.getContacts(userId),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return Center(child: Text('Ошибка: ${snapshot.error}'));
           }
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -105,12 +105,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('No contacts yet'),
+                  const Text('Пока нет контактов'),
                   const SizedBox(height: 8),
                   FilledButton.icon(
                     onPressed: () => Navigator.pushNamed(context, '/add-contact'),
                     icon: const Icon(Icons.person_add_alt),
-                    label: const Text('Add contact'),
+                    label: const Text('Добавить контакт'),
                   ),
                 ],
               ),
@@ -133,8 +133,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     if (value == 'remove') _removeContact(contact);
                   },
                   itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'nickname', child: Text('Edit nickname')),
-                    PopupMenuItem(value: 'remove', child: Text('Remove')),
+                    PopupMenuItem(value: 'nickname', child: Text('Изменить имя')),
+                    PopupMenuItem(value: 'remove', child: Text('Удалить')),
                   ],
                 ),
               );

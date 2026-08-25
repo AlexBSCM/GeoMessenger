@@ -1,4 +1,4 @@
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+﻿import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,7 +6,7 @@ import '../models/message_model.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  final title = message.notification?.title ?? 'New Geo Message!';
+  final title = message.notification?.title ?? 'Новое гео-сообщение!';
   final body = message.notification?.body ?? message.data['text'] ?? '';
   const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
   const settings = InitializationSettings(android: androidSettings);
@@ -45,6 +45,14 @@ class NotificationService {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
 
+  /// Local notifications only вЂ” used in the background service isolate where
+  /// the FCM background handler must not be registered twice.
+  Future<void> initLocalOnly() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const settings = InitializationSettings(android: androidSettings);
+    await _notifications.initialize(settings);
+  }
+
   Future<void> showIncomingMessageNotification(GeoMessage message) async {
     const androidDetails = AndroidNotificationDetails(
       'geo_messages',
@@ -58,7 +66,7 @@ class NotificationService {
 
     await _notifications.show(
       message.id.hashCode,
-      'New geo message from ${message.senderName}',
+      'Новое сообщение от ${message.senderName}',
       message.text,
       details,
     );
@@ -85,7 +93,7 @@ class NotificationService {
 
     await _notifications.show(
       message.id.hashCode,
-      'New Geo Message!',
+      'Новое гео-сообщение!',
       '${message.senderName}: ${message.text}',
       details,
     );

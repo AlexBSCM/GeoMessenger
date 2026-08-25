@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/message_store.dart';
 
@@ -14,11 +14,11 @@ class _InboxScreenState extends State<InboxScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Inbox'),
+        title: const Text('Входящие'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Log out',
+            tooltip: 'Выйти',
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
             },
@@ -32,7 +32,7 @@ class _InboxScreenState extends State<InboxScreen> {
         builder: (context, _) {
           final messages = MessageStore.instance.visibleMessages;
           if (messages.isEmpty) {
-            return const Center(child: Text('No messages yet'));
+            return const Center(child: Text('Пока нет сообщений'));
           }
           return ListView.builder(
             itemCount: messages.length,
@@ -45,7 +45,7 @@ class _InboxScreenState extends State<InboxScreen> {
                   title: Text(msg.senderName),
                   subtitle: Text(msg.text),
                   trailing: const Text(
-                    'Delivered',
+                    'Доставлено',
                     style: TextStyle(color: Colors.green, fontSize: 12),
                   ),
                 ),

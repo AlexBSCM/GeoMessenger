@@ -39,15 +39,15 @@ class _SentScreenState extends State<SentScreen> {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('Delete message${count == 1 ? '' : 's'}?'),
+            title: Text(count == 1 ? 'Удалить сообщение?' : 'Удалить сообщения?'),
             content: Text(count == 1
-                ? '"$text" will be permanently deleted.'
-                : '$count messages will be permanently deleted.'),
+                ? '«$text» будет удалено безвозвратно.'
+                : '$count сообщений будет удалено безвозвратно.'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete'),
+                child: const Text('Удалить'),
               ),
             ],
           ),
@@ -86,28 +86,28 @@ class _SentScreenState extends State<SentScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selectMode ? 'Selected: ${_selectedIds.length}' : 'Sent'),
+        title: Text(_selectMode ? 'Выбрано: ${_selectedIds.length}' : 'Отправленные'),
         actions: [
           if (!_selectMode)
             IconButton(
               icon: const Icon(Icons.checklist),
-              tooltip: 'Select messages',
+              tooltip: 'Выбрать сообщения',
               onPressed: () => setState(() => _selectMode = true),
             )
           else ...[
             IconButton(
               icon: const Icon(Icons.done_all),
-              tooltip: 'Select all',
+              tooltip: 'Выбрать все',
               onPressed: () => _toggleSelectAll(_currentMessages),
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
-              tooltip: 'Delete selected',
+              tooltip: 'Удалить выбранные',
               onPressed: _selectedIds.isEmpty ? null : _deleteSelected,
             ),
             IconButton(
               icon: const Icon(Icons.close),
-              tooltip: 'Cancel',
+              tooltip: 'Отмена',
               onPressed: _exitSelectMode,
             ),
           ],
@@ -126,7 +126,7 @@ class _SentScreenState extends State<SentScreen> {
           messages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
           _currentMessages = messages;
           if (messages.isEmpty) {
-            return const Center(child: Text('No sent messages yet'));
+            return const Center(child: Text('Нет отправленных сообщений'));
           }
           return ListView.builder(
             itemCount: messages.length,
@@ -149,14 +149,14 @@ class _SentScreenState extends State<SentScreen> {
                                 : '?',
                           ),
                         ),
-                  title: Text('To: ${msg.recipientName.isEmpty ? 'Unknown' : msg.recipientName}'),
+                  title: Text('Кому: ${msg.recipientName.isEmpty ? 'неизвестно' : msg.recipientName}'),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(msg.text),
                       const SizedBox(height: 2),
                       Text(
-                        'Radius: ${msg.radiusMeters.toInt()}m · ${msg.status.toUpperCase()}',
+                        'Радиус: ${msg.radiusMeters.toInt()}м · ${_statusLabel(msg)}',
                         style: const TextStyle(fontSize: 11),
                       ),
                     ],
@@ -171,8 +171,8 @@ class _SentScreenState extends State<SentScreen> {
                           },
                           itemBuilder: (context) => [
                             if (canEdit)
-                              const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                            const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                              const PopupMenuItem(value: 'edit', child: Text('Изменить')),
+                            const PopupMenuItem(value: 'delete', child: Text('Удалить')),
                           ],
                         ),
                 ),
@@ -182,6 +182,14 @@ class _SentScreenState extends State<SentScreen> {
         },
       ),
     );
+  }
+
+  String _statusLabel(GeoMessage msg) {
+    if (msg.status != 'delivered') return 'Ожидает';
+    final d = msg.deliveredAt;
+    if (d == null) return 'Доставлено';
+    String two(int v) => v.toString().padLeft(2, '0');
+    return 'Доставлено ${two(d.day)}.${two(d.month)} ${two(d.hour)}:${two(d.minute)}';
   }
 
   List<GeoMessage> _currentMessages = [];

@@ -52,7 +52,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
     await _db.addContact(userId, user);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${user.name} added to contacts')),
+      SnackBar(content: Text('${user.name} добавлен в контакты')),
     );
     _search();
   }
@@ -67,7 +67,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add contact')),
+      appBar: AppBar(title: const Text('Добавить контакт')),
       body: Column(
         children: [
           Padding(
@@ -76,7 +76,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
               controller: _searchController,
               onChanged: _onQueryChanged,
               decoration: const InputDecoration(
-                labelText: 'Search by login or phone',
+                labelText: 'Поиск по логину',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
@@ -86,7 +86,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _results.isEmpty
-                    ? const Center(child: Text('No users found'))
+                    ? const Center(child: Text('Ничего не найдено'))
                     : ListView.builder(
                         itemCount: _results.length,
                         itemBuilder: (context, index) {

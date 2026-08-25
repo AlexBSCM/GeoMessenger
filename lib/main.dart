@@ -1,13 +1,19 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'firebase_options.dart';
 import 'models/user_model.dart';
 import 'models/message_model.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
-import 'services/database_service.dart';
+import 'services/geofence_monitor.dart';
 import 'services/location_service.dart';
 import 'services/message_store.dart';
 import 'services/background_service.dart';
@@ -17,13 +23,27 @@ import 'screens/add_contact_screen.dart';
 import 'screens/create_message_screen.dart';
 import 'screens/inbox_screen.dart';
 import 'screens/sent_screen.dart';
+import 'screens/map_screen.dart';
 
 const bool useEmulator = bool.fromEnvironment('USE_EMULATOR', defaultValue: true);
 const String emulatorHost = String.fromEnvironment('EMULATOR_HOST', defaultValue: 'localhost');
+const _activeUserKey = 'activeUserId';
+
+Timer? _heartbeatTimer;
+
+void _sendHeartbeat() {
+  FlutterBackgroundService().invoke('heartbeat');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: firebaseOptions);
+
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
 
   // Connect to local emulators (disable with --dart-define=USE_EMULATOR=false)
   if (useEmulator) {
@@ -43,7 +63,7 @@ void main() async {
 
   await NotificationService().init();
 
-  FirebaseAuth.instance.authStateChanges().listen((user) {
+  FirebaseAuth.instance.authStateChanges().listen((user) async {
     if (user != null) {
       NotificationService().saveToken();
       // Local cache backs the geofence monitor: pending messages downloaded
@@ -51,22 +71,22 @@ void main() async {
       // even without internet. Deliveries are synced to Firestore when online.
       MessageStore.instance.init(user.uid);
       // Foreground service keeps the process (and the geofence loop) alive
-      // when the app is backgrounded or the screen is locked.
-      BackgroundService.instance.ensureStarted();
+      // when the app is backgrounded or the screen is locked, and takes over
+      // monitoring entirely if the app isolate dies (swipe away / reboot).
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_activeUserKey, user.uid);
+      await BackgroundService.instance.ensureStarted();
+      _heartbeatTimer?.cancel();
+      _sendHeartbeat();
+      _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) => _sendHeartbeat());
       LocationService.instance.stop();
       LocationService.instance
           .startGeofenceMonitoring(() async => MessageStore.instance.pendingMessages)
-          .listen((message) async {
-        MessageStore.instance.revealLocally(message.id);
-        await NotificationService().showGeoMessageNotification(message);
-        try {
-          await DatabaseService().markDelivered(message.id);
-          await MessageStore.instance.confirmDelivered(message.id);
-        } catch (_) {
-          // Offline — the delivery stays queued and syncs later.
-        }
-      });
+          .listen(GeofenceMonitor.reveal);
     } else {
+      _heartbeatTimer?.cancel();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_activeUserKey);
       LocationService.instance.stop();
       MessageStore.instance.clear();
       BackgroundService.instance.stop();
@@ -148,19 +168,50 @@ class _MainShellState extends State<MainShell> {
     ContactsScreen(),
     InboxScreen(),
     SentScreen(),
+    MapScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: Column(
+        children: [
+          // Offline banner: deliveries keep working via the local cache and
+          // sync to Firestore once a connection is back.
+          StreamBuilder<List<ConnectivityResult>>(
+            stream: Connectivity().onConnectivityChanged,
+            builder: (context, snapshot) {
+              final results = snapshot.data;
+              final offline = results != null &&
+                  !results.any((r) => r != ConnectivityResult.none);
+              if (!offline) return const SizedBox.shrink();
+              return const Material(
+                color: Colors.deepOrange,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      'Нет сети — сообщения раскроются офлайн, отправка после подключения',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          Expanded(child: _screens[_currentIndex]),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.people), label: 'Contacts'),
-          NavigationDestination(icon: Icon(Icons.inbox), label: 'Inbox'),
-          NavigationDestination(icon: Icon(Icons.outbox), label: 'Sent'),
+          NavigationDestination(icon: Icon(Icons.people), label: 'Контакты'),
+          NavigationDestination(icon: Icon(Icons.inbox), label: 'Входящие'),
+          NavigationDestination(icon: Icon(Icons.outbox), label: 'Отправл.'),
+          NavigationDestination(icon: Icon(Icons.map), label: 'Карта'),
         ],
       ),
     );

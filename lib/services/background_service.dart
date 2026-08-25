@@ -1,17 +1,29 @@
 import 'dart:async';
+import 'dart:ui';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../firebase_options.dart';
+import 'geofence_monitor.dart';
 import 'location_service.dart';
+import 'message_store.dart';
+import 'notification_service.dart';
 
 const bgNotificationChannelId = 'geo_bg_service';
 const bgNotificationId = 888;
+const _activeUserKey = 'activeUserId';
 
-/// Keeps the app process alive in the background so the geofence monitor (which
-/// runs in the main isolate) keeps checking positions and revealing messages,
-/// even with the screen off and without internet.
+/// Keeps the app process alive in the background and takes over geofence
+/// monitoring whenever the app's own isolate is dead (app swiped away or
+/// device rebooted).
 ///
-/// The service itself does nothing: its only job is to make Android keep the
-/// process running (foreground service) and to allow background location access.
+/// Handover protocol: the app isolate sends a 'heartbeat' every 30 s while it
+/// is alive (it monitors by itself). If no heartbeat arrives within 45 s, the
+/// service starts its own monitoring loop; when heartbeats resume, it stands
+/// down. This guarantees exactly one active monitor with no double
+/// notifications in the steady state.
 class BackgroundService {
   BackgroundService._();
   static final BackgroundService instance = BackgroundService._();
@@ -29,8 +41,8 @@ class BackgroundService {
         ?.createNotificationChannel(
           const AndroidNotificationChannel(
             bgNotificationChannelId,
-            'Geo Messenger',
-            description: 'Monitoring geozones while the app is in the background',
+            'Гео Мессенджер',
+            description: 'Мониторинг геозон в фоне',
             importance: Importance.low,
           ),
         );
@@ -41,10 +53,10 @@ class BackgroundService {
         onStart: onStart,
         autoStart: false,
         isForegroundMode: true,
-        autoStartOnBoot: false,
+        autoStartOnBoot: true,
         notificationChannelId: bgNotificationChannelId,
-        initialNotificationTitle: 'Geo Messenger',
-        initialNotificationContent: 'Monitoring geozones is active',
+        initialNotificationTitle: 'Гео Мессенджер',
+        initialNotificationContent: 'Мониторинг геозон активен',
         foregroundServiceNotificationId: bgNotificationId,
       ),
       iosConfiguration: IosConfiguration(
@@ -60,6 +72,14 @@ class BackgroundService {
     await configure();
     final granted = await LocationService.instance.requestPermission();
     if (!granted) return;
+
+    // MIUI/HyperOS and stock Android kill background apps unless the battery
+    // optimization exemption is granted. Shows a one-time system dialog.
+    final status = await Permission.ignoreBatteryOptimizations.status;
+    if (!status.isGranted) {
+      await Permission.ignoreBatteryOptimizations.request();
+    }
+
     final service = FlutterBackgroundService();
     if (!await service.isRunning()) {
       await service.startService();
@@ -82,10 +102,52 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
-  // Keep the service alive; the geofence work itself runs in the main isolate.
+  DartPluginRegistrant.ensureInitialized();
+  await Firebase.initializeApp(options: firebaseOptions);
+  await NotificationService().initLocalOnly();
+
+  // Keep the service process alive.
   Timer.periodic(const Duration(seconds: 30), (timer) {});
 
-  service.on('stop').listen((event) {
-    service.stopSelf();
+  var lastHeartbeat = DateTime.fromMillisecondsSinceEpoch(0);
+  var monitoring = false;
+
+  service.on('heartbeat').listen((_) {
+    lastHeartbeat = DateTime.now();
+  });
+  service.on('stop').listen((_) => service.stopSelf());
+
+  Future<void> standDown() async {
+    if (!monitoring) return;
+    monitoring = false;
+    LocationService.instance.stop();
+    await MessageStore.instance.clear();
+  }
+
+  Future<void> takeOver() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString(_activeUserKey);
+    if (userId == null) return;
+    monitoring = true;
+    await MessageStore.instance.init(userId);
+    LocationService.instance
+        .startGeofenceMonitoring(
+            () async => MessageStore.instance.pendingMessages)
+        .listen((message) => GeofenceMonitor.reveal(message));
+  }
+
+  Timer.periodic(const Duration(seconds: 15), (_) async {
+    try {
+      final mainAlive =
+          DateTime.now().difference(lastHeartbeat).inSeconds < 45;
+      if (mainAlive) {
+        await standDown();
+        return;
+      }
+      if (monitoring) return;
+      await takeOver();
+    } catch (_) {
+      // Never let the watchdog timer die.
+    }
   });
 }

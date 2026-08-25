@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/message_model.dart';
@@ -122,9 +123,21 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
         );
       }
       MapStateService.saveCenter(_selectedPoint!);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      // Do not close the screen on failure: the message was NOT sent, and the
+      // user must know (before this, failures silently looked like "sent").
+      FirebaseCrashlytics.instance.recordError(e, StackTrace.current);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Не удалось отправить. Проверьте сеть и попробуйте ещё раз'),
+          ),
+        );
+      }
+      return;
     }
+    if (mounted) setState(() => _isLoading = false);
 
     if (mounted) {
       Navigator.pop(context);
@@ -142,8 +155,8 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
   Widget build(BuildContext context) {
     final edit = widget.editMessage;
     final title = edit != null
-        ? 'Edit message to ${edit.recipientName.isEmpty ? 'recipient' : edit.recipientName}'
-        : 'Message to ${widget.recipient!.name}';
+        ? 'Изменить сообщение для ${edit.recipientName.isEmpty ? 'получателя' : edit.recipientName}'
+        : 'Сообщение для ${widget.recipient!.name}';
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -209,8 +222,8 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
                 TextField(
                   controller: _textController,
                   decoration: const InputDecoration(
-                    labelText: 'Your message',
-                    hintText: 'Type something...',
+                    labelText: 'Ваше сообщение',
+                    hintText: 'Введите текст...',
                   ),
                   maxLines: 2,
                 ),
@@ -240,9 +253,9 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
                     Expanded(
                       child: Text(
                         _selectedPoint == null
-                            ? 'Tap the map to pin a point'
-                            : 'Lat: ${_selectedPoint!.latitude.toStringAsFixed(5)}, '
-                                'Lng: ${_selectedPoint!.longitude.toStringAsFixed(5)}',
+                            ? 'Коснитесь карты, чтобы выбрать точку'
+                            : 'Шир: ${_selectedPoint!.latitude.toStringAsFixed(5)}, '
+                                'Долг: ${_selectedPoint!.longitude.toStringAsFixed(5)}',
                         style: const TextStyle(fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -251,7 +264,7 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Radius: ${_radiusMeters.toInt()}m — triggers when the recipient is close to the point',
+                  'Радиус: ${_radiusMeters.toInt()}м — сработает, когда получатель подойдёт к точке',
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 12),
@@ -263,8 +276,8 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : Icon(edit != null ? Icons.save : Icons.send),
                     label: Text(_isLoading
-                        ? (edit != null ? 'Saving...' : 'Sending...')
-                        : (edit != null ? 'Save changes' : 'Send')),
+                        ? (edit != null ? 'Сохранение...' : 'Отправка...')
+                        : (edit != null ? 'Сохранить' : 'Отправить')),
                   ),
                 ),
               ],
@@ -274,7 +287,7 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _locateMe,
-        tooltip: 'Use current location',
+        tooltip: 'Моё местоположение',
         child: const Icon(Icons.my_location),
       ),
     );

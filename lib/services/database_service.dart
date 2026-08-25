@@ -30,7 +30,10 @@ class DatabaseService {
       longitude: longitude,
       radiusMeters: radiusMeters,
     );
-    await _firestore.collection('messages').doc(id).set(message.toMap());
+    // Server timestamp: ordering must not depend on the sender's clock.
+    final map = message.toMap()
+      ..['createdAt'] = FieldValue.serverTimestamp();
+    await _firestore.collection('messages').doc(id).set(map);
     return id;
   }
 
@@ -65,7 +68,9 @@ class DatabaseService {
         .collection('messages')
         .where('recipientId', isEqualTo: userId)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList());
+        .map((snapshot) => snapshot.docs
+            .map((doc) => GeoMessage.fromMap(doc.data()))
+            .toList());
   }
 
   Stream<List<GeoMessage>> getSentMessages(String userId) {
@@ -73,7 +78,9 @@ class DatabaseService {
         .collection('messages')
         .where('senderId', isEqualTo: userId)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList());
+        .map((snapshot) => snapshot.docs
+            .map((doc) => GeoMessage.fromMap(doc.data()))
+            .toList());
   }
 
   Future<List<GeoMessage>> getActiveGeofences(String userId) async {
@@ -92,7 +99,7 @@ class DatabaseService {
     if (!doc.exists) return;
     final data = doc.data()!;
     data['status'] = 'delivered';
-    data['deliveredAt'] = DateTime.now().toIso8601String();
+    data['deliveredAt'] = FieldValue.serverTimestamp();
     await _firestore.collection('messages').doc(messageId).set(data);
   }
 
@@ -139,13 +146,22 @@ class DatabaseService {
   }
 
   Future<List<AppUser>> searchUsers(String query) async {
-    final snapshot = await _firestore.collection('users').get();
-    final users = snapshot.docs.map((doc) => AppUser.fromMap(doc.data())).toList();
+    // Exact lookup by login (name) or synthetic email (phone). Substring
+    // search would require loading the whole users collection.
     final q = query.trim().toLowerCase();
-    if (q.isEmpty) return users;
-    return users
-        .where((u) => u.name.toLowerCase().contains(q) || u.phone.toLowerCase().contains(q))
-        .toList();
+    if (q.isEmpty) return [];
+    final email = q.contains('@') ? q : '$q@geomesenger.local';
+    final results = await Future.wait([
+      _firestore.collection('users').where('name', isEqualTo: q).get(),
+      _firestore.collection('users').where('phone', isEqualTo: email).get(),
+    ]);
+    final found = <String, AppUser>{};
+    for (final snap in results) {
+      for (final doc in snap.docs) {
+        found[doc.id] = AppUser.fromMap(doc.data());
+      }
+    }
+    return found.values.toList();
   }
 
   Future<AppUser?> getUser(String userId) async {

@@ -105,12 +105,18 @@ class LocationService {
     required bool forceLocationManager,
     required Future<List<GeoMessage>> Function() fetcher,
   }) async {
+    // Watchdog: if no position arrives within the window (provider stalled,
+    // background throttling), throw so the outer loop restarts the stream.
     final stream = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
         accuracy: LocationAccuracy.high,
         forceLocationManager: forceLocationManager,
         intervalDuration: _streamInterval,
       ),
+    ).timeout(
+      const Duration(seconds: 60),
+      onTimeout: (sink) =>
+          sink.addError(TimeoutException('position stream stalled')),
     );
 
     await for (final position in stream) {

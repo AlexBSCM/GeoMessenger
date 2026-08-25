@@ -20,18 +20,18 @@ class _LoginScreenState extends State<LoginScreen> {
     switch (e.code) {
       case 'wrong-password':
       case 'invalid-credential':
-        return 'Wrong password';
+        return 'Неверный пароль';
       case 'user-not-found':
       case 'invalid-email':
-        return 'Invalid login';
+        return 'Неверный логин';
       case 'account-not-allowed':
-        return 'This login is not allowed yet';
+        return 'Этот логин пока не разрешён';
       case 'weak-password':
-        return 'Password must be at least 6 characters';
+        return 'Пароль должен быть не короче 6 символов';
       case 'network-request-failed':
-        return 'Network error. Is the emulator running?';
+        return 'Ошибка сети. Проверьте подключение';
       default:
-        return 'Login failed (${e.code})';
+        return 'Ошибка входа (${e.code})';
     }
   }
 
@@ -52,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Login failed')),
+          const SnackBar(content: Text('Не удалось войти')),
         );
       }
     } finally {
@@ -70,18 +70,18 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Geo Messenger')),
+      appBar: AppBar(title: const Text('Гео Мессенджер')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Welcome!', style: Theme.of(context).textTheme.headlineMedium),
+            Text('Добро пожаловать!', style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 24),
             TextField(
               controller: _loginController,
               decoration: const InputDecoration(
-                labelText: 'Login',
+                labelText: 'Логин',
                 border: OutlineInputBorder(),
               ),
               autocorrect: false,
@@ -91,11 +91,11 @@ class _LoginScreenState extends State<LoginScreen> {
             TextField(
               controller: _passController,
               decoration: InputDecoration(
-                labelText: 'Password',
+                labelText: 'Пароль',
                 border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                   icon: Icon(_obscurePass ? Icons.visibility_off : Icons.visibility),
-                  tooltip: _obscurePass ? 'Show password' : 'Hide password',
+                  tooltip: _obscurePass ? 'Показать пароль' : 'Скрыть пароль',
                   onPressed: () => setState(() => _obscurePass = !_obscurePass),
                 ),
               ),
@@ -110,12 +110,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _loading ? null : _login,
                 child: _loading
                     ? const CircularProgressIndicator()
-                    : const Text('Login / Register'),
+                    : const Text('Войти'),
               ),
             ),
             const SizedBox(height: 12),
             const Text(
-              'New here? Just enter a login and password — an account will be created automatically.',
+              'Впервые? Введите логин и пароль — аккаунт будет создан автоматически.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
               textAlign: TextAlign.center,
             ),

@@ -11,6 +11,7 @@ class GeoMessage {
   final double longitude;
   final double radiusMeters;
   final DateTime createdAt;
+  final DateTime? deliveredAt;
   final String status;
 
   GeoMessage({
@@ -24,12 +25,14 @@ class GeoMessage {
     required this.longitude,
     this.radiusMeters = 10,
     DateTime? createdAt,
+    this.deliveredAt,
     this.status = 'pending',
   }) : createdAt = createdAt ?? DateTime.now();
 
   GeoMessage copyWith({
     String? status,
     DateTime? createdAt,
+    DateTime? deliveredAt,
     double? radiusMeters,
   }) =>
       GeoMessage(
@@ -43,10 +46,11 @@ class GeoMessage {
         longitude: longitude,
         radiusMeters: radiusMeters ?? this.radiusMeters,
         createdAt: createdAt ?? this.createdAt,
+        deliveredAt: deliveredAt ?? this.deliveredAt,
         status: status ?? this.status,
       );
 
-  Map<String, dynamic> toMap() => {
+Map<String, dynamic> toMap() => {
         'id': id,
         'senderId': senderId,
         'senderName': senderName,
@@ -57,28 +61,30 @@ class GeoMessage {
         'longitude': longitude,
         'radiusMeters': radiusMeters,
         'createdAt': createdAt.toIso8601String(),
+        'deliveredAt': deliveredAt?.toIso8601String(),
         'status': status,
       };
 
   factory GeoMessage.fromMap(Map<String, dynamic> map) => GeoMessage(
         id: map['id'] as String,
         senderId: map['senderId'] as String,
-        senderName: map['senderName'] as String,
+        senderName: map['senderName'] as String? ?? '',
         recipientId: map['recipientId'] as String,
         recipientName: map['recipientName'] as String? ?? '',
         text: map['text'] as String,
         latitude: (map['latitude'] as num).toDouble(),
         longitude: (map['longitude'] as num).toDouble(),
         radiusMeters: (map['radiusMeters'] as num?)?.toDouble() ?? 10,
-        createdAt: _parseCreatedAt(map['createdAt']),
+        createdAt: _parseDate(map['createdAt']),
+        deliveredAt: map['deliveredAt'] == null ? null : _parseDate(map['deliveredAt']),
         status: map['status'] as String? ?? 'pending',
       );
 
-  /// Accepts both ISO strings (what the app writes) and Firestore Timestamps
-  /// (older/imported documents) so a single inconsistent document does not
-  /// crash the whole inbox/sent stream.
-  static DateTime _parseCreatedAt(Object? value) {
+  /// Accepts Firestore Timestamps, ISO strings and null (pending server
+  /// timestamps) so one inconsistent document cannot crash a whole stream.
+  static DateTime _parseDate(Object? value) {
     if (value is Timestamp) return value.toDate();
-    return DateTime.parse(value as String);
+    if (value is String) return DateTime.parse(value);
+    return DateTime.now();
   }
 }

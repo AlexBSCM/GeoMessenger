@@ -3,6 +3,7 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 dependencies {
@@ -11,7 +12,8 @@ dependencies {
 
 android {
     namespace = "com.geomessenger.geo_messenger"
-    compileSdk = flutter.compileSdkVersion
+    // permission_handler_android requires compiling against API 37+.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
