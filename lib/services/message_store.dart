@@ -12,10 +12,13 @@ import 'database_service.dart';
 /// revealed locally as soon as the user enters the point, and the delivery is
 /// pushed to Firestore later when a connection is available again.
 class MessageStore extends ChangeNotifier {
-  MessageStore._();
+  MessageStore._() : _db = DatabaseService();
   static final MessageStore instance = MessageStore._();
 
-  final DatabaseService _db = DatabaseService();
+  /// Test-only: allows injecting a fake database.
+  MessageStore.forTest(DatabaseService db) : _db = db;
+
+  final DatabaseService _db;
 
   String? _userId;
   StreamSubscription<List<GeoMessage>>? _sub;

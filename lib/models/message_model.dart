@@ -4,7 +4,7 @@ class GeoMessage {
   final String id;
   final String senderId;
   final String senderName;
-  final String recipientId;
+  final List<String> recipientIds;
   final String recipientName;
   final String text;
   final double latitude;
@@ -18,7 +18,7 @@ class GeoMessage {
     required this.id,
     required this.senderId,
     required this.senderName,
-    required this.recipientId,
+    required this.recipientIds,
     this.recipientName = '',
     required this.text,
     required this.latitude,
@@ -29,7 +29,7 @@ class GeoMessage {
     this.status = 'pending',
   }) : createdAt = createdAt ?? DateTime.now();
 
-  GeoMessage copyWith({
+GeoMessage copyWith({
     String? status,
     DateTime? createdAt,
     DateTime? deliveredAt,
@@ -39,7 +39,7 @@ class GeoMessage {
         id: id,
         senderId: senderId,
         senderName: senderName,
-        recipientId: recipientId,
+        recipientIds: recipientIds,
         recipientName: recipientName,
         text: text,
         latitude: latitude,
@@ -50,11 +50,11 @@ class GeoMessage {
         status: status ?? this.status,
       );
 
-Map<String, dynamic> toMap() => {
+  Map<String, dynamic> toMap() => {
         'id': id,
         'senderId': senderId,
         'senderName': senderName,
-        'recipientId': recipientId,
+        'recipientIds': recipientIds,
         'recipientName': recipientName,
         'text': text,
         'latitude': latitude,
@@ -65,11 +65,15 @@ Map<String, dynamic> toMap() => {
         'status': status,
       };
 
-  factory GeoMessage.fromMap(Map<String, dynamic> map) => GeoMessage(
+  factory GeoMessage.fromMap(Map<String, dynamic> map) {
+    // Old documents store a single recipientId string; new ones a list.
+    final ids = (map['recipientIds'] as List?)?.cast<String>() ??
+        [map['recipientId'] as String];
+    return GeoMessage(
         id: map['id'] as String,
         senderId: map['senderId'] as String,
         senderName: map['senderName'] as String? ?? '',
-        recipientId: map['recipientId'] as String,
+        recipientIds: ids,
         recipientName: map['recipientName'] as String? ?? '',
         text: map['text'] as String,
         latitude: (map['latitude'] as num).toDouble(),
@@ -79,6 +83,7 @@ Map<String, dynamic> toMap() => {
         deliveredAt: map['deliveredAt'] == null ? null : _parseDate(map['deliveredAt']),
         status: map['status'] as String? ?? 'pending',
       );
+  }
 
   /// Accepts Firestore Timestamps, ISO strings and null (pending server
   /// timestamps) so one inconsistent document cannot crash a whole stream.

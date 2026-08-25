@@ -10,12 +10,15 @@ import '../services/location_service.dart';
 import '../services/map_state_service.dart';
 
 class CreateMessageScreen extends StatefulWidget {
-  final AppUser? recipient;
+  final List<AppUser> recipients;
   final GeoMessage? editMessage;
 
-  const CreateMessageScreen({super.key, this.recipient, this.editMessage})
-      : assert(recipient != null || editMessage != null,
-            'Either recipient or editMessage must be provided');
+  CreateMessageScreen({
+    super.key,
+    this.recipients = const [],
+    this.editMessage,
+  })  : assert(recipients.isNotEmpty || editMessage != null,
+            'Either recipients or editMessage must be provided');
 
   bool get isEditing => editMessage != null;
 
@@ -114,8 +117,8 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
         await _db.createMessage(
           senderId: user.uid,
           senderName: _senderName,
-          recipientId: widget.recipient!.id,
-          recipientName: widget.recipient!.name,
+          recipientIds: widget.recipients.map((r) => r.id).toList(),
+          recipientName: widget.recipients.map((r) => r.name).join(', '),
           text: text,
           latitude: _selectedPoint!.latitude,
           longitude: _selectedPoint!.longitude,
@@ -156,7 +159,9 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
     final edit = widget.editMessage;
     final title = edit != null
         ? 'Изменить сообщение для ${edit.recipientName.isEmpty ? 'получателя' : edit.recipientName}'
-        : 'Сообщение для ${widget.recipient!.name}';
+        : widget.recipients.length == 1
+            ? 'Сообщение для ${widget.recipients.first.name}'
+            : 'Сообщение для ${widget.recipients.length} получателей';
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),

@@ -11,7 +11,7 @@ class DatabaseService {
   Future<String> createMessage({
     required String senderId,
     required String senderName,
-    required String recipientId,
+    required List<String> recipientIds,
     required String recipientName,
     required String text,
     required double latitude,
@@ -23,7 +23,7 @@ class DatabaseService {
       id: id,
       senderId: senderId,
       senderName: senderName,
-      recipientId: recipientId,
+      recipientIds: recipientIds,
       recipientName: recipientName,
       text: text,
       latitude: latitude,
@@ -66,7 +66,7 @@ class DatabaseService {
     // any Firestore orderBy query fail for the whole stream. Sort in memory.
     return _firestore
         .collection('messages')
-        .where('recipientId', isEqualTo: userId)
+        .where('recipientIds', arrayContains: userId)
         .snapshots()
         .map((snapshot) => snapshot.docs
             .map((doc) => GeoMessage.fromMap(doc.data()))
@@ -86,7 +86,7 @@ class DatabaseService {
   Future<List<GeoMessage>> getActiveGeofences(String userId) async {
     final snapshot = await _firestore
         .collection('messages')
-        .where('recipientId', isEqualTo: userId)
+        .where('recipientIds', arrayContains: userId)
         .where('status', isEqualTo: 'pending')
         .get();
     return snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList();

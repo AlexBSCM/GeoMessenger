@@ -14,6 +14,32 @@ class ContactsScreen extends StatefulWidget {
 
 class _ContactsScreenState extends State<ContactsScreen> {
   final _db = DatabaseService();
+  bool _selectMode = false;
+  final List<Contact> _selected = [];
+
+  void _toggleSelect(Contact contact) {
+    setState(() {
+      if (!_selected.remove(contact)) {
+        _selected.add(contact);
+      }
+      if (_selected.isEmpty) _selectMode = false;
+    });
+  }
+
+  void _openGroupCreate() {
+    final recipients = _selected
+        .map((c) => AppUser(
+              id: c.contactId,
+              name: c.displayName,
+              phone: c.contactPhone,
+            ))
+        .toList();
+    setState(() {
+      _selected.clear();
+      _selectMode = false;
+    });
+    Navigator.pushNamed(context, '/create', arguments: recipients);
+  }
 
   Future<void> _logout(BuildContext context) async {
     await AuthService().signOut();
@@ -75,13 +101,20 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Контакты'),
+        title: Text(_selectMode ? 'Выбрано: ${_selected.length}' : 'Контакты'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add_alt),
-            tooltip: 'Добавить контакт',
-            onPressed: () => Navigator.pushNamed(context, '/add-contact'),
-          ),
+          if (!_selectMode) ...[
+            IconButton(
+              icon: const Icon(Icons.checklist),
+              tooltip: 'Выбрать несколько',
+              onPressed: () => setState(() => _selectMode = true),
+            ),
+            IconButton(
+              icon: const Icon(Icons.person_add_alt),
+              tooltip: 'Добавить контакт',
+              onPressed: () => Navigator.pushNamed(context, '/add-contact'),
+            ),
+          ],
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Выйти',
@@ -120,28 +153,54 @@ class _ContactsScreenState extends State<ContactsScreen> {
             itemCount: contacts.length,
             itemBuilder: (context, index) {
               final contact = contacts[index];
+              final selected = _selected.contains(contact);
               return ListTile(
-                leading: CircleAvatar(
-                  child: Text(contact.displayName.isNotEmpty ? contact.displayName[0].toUpperCase() : '?'),
-                ),
+                leading: _selectMode
+                    ? Checkbox(
+                        value: selected,
+                        onChanged: (_) => _toggleSelect(contact),
+                      )
+                    : CircleAvatar(
+                        child: Text(contact.displayName.isNotEmpty ? contact.displayName[0].toUpperCase() : '?'),
+                      ),
                 title: Text(contact.displayName),
                 subtitle: Text(contact.contactPhone),
-                onTap: () => _openCreateMessage(contact),
-                trailing: PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'nickname') _editNickname(contact);
-                    if (value == 'remove') _removeContact(contact);
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'nickname', child: Text('Изменить имя')),
-                    PopupMenuItem(value: 'remove', child: Text('Удалить')),
-                  ],
-                ),
+                onTap: () {
+                  if (_selectMode) {
+                    _toggleSelect(contact);
+                  } else {
+                    _openCreateMessage(contact);
+                  }
+                },
+                trailing: _selectMode
+                    ? null
+                    : PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'nickname') _editNickname(contact);
+                          if (value == 'remove') _removeContact(contact);
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(value: 'nickname', child: Text('Изменить имя')),
+                          PopupMenuItem(value: 'remove', child: Text('Удалить')),
+                        ],
+                      ),
               );
             },
           );
         },
       ),
+      bottomNavigationBar: _selectMode && _selected.isNotEmpty
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: FilledButton.icon(
+                  onPressed: _openGroupCreate,
+                  icon: const Icon(Icons.send),
+                  label: Text('Написать (${_selected.length})'),
+                ),
+              ),
+            )
+          : null,
     );
   }
 }

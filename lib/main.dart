@@ -116,9 +116,9 @@ class GeoMessengerApp extends StatelessWidget {
               builder: (_) => CreateMessageScreen(editMessage: arg),
             );
           }
-          final recipient = arg as AppUser;
+          final recipients = arg is AppUser ? [arg] : arg as List<AppUser>;
           return MaterialPageRoute(
-            builder: (_) => CreateMessageScreen(recipient: recipient),
+            builder: (_) => CreateMessageScreen(recipients: recipients),
           );
         }
         if (settings.name == '/add-contact') {
