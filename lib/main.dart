@@ -7,7 +7,6 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'firebase_options.dart';
 import 'models/user_model.dart';
 import 'models/message_model.dart';
@@ -24,6 +23,7 @@ import 'screens/create_message_screen.dart';
 import 'screens/inbox_screen.dart';
 import 'screens/sent_screen.dart';
 import 'screens/map_screen.dart';
+import 'widgets/offline_banner.dart';
 
 const bool useEmulator = bool.fromEnvironment('USE_EMULATOR', defaultValue: true);
 const String emulatorHost = String.fromEnvironment('EMULATOR_HOST', defaultValue: 'localhost');
@@ -178,28 +178,8 @@ class _MainShellState extends State<MainShell> {
         children: [
           // Offline banner: deliveries keep working via the local cache and
           // sync to Firestore once a connection is back.
-          StreamBuilder<List<ConnectivityResult>>(
-            stream: Connectivity().onConnectivityChanged,
-            builder: (context, snapshot) {
-              final results = snapshot.data;
-              final offline = results != null &&
-                  !results.any((r) => r != ConnectivityResult.none);
-              if (!offline) return const SizedBox.shrink();
-              return const Material(
-                color: Colors.deepOrange,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      'Нет сети — сообщения раскроются офлайн, отправка после подключения',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ),
-                ),
-              );
-            },
+          const OfflineBanner(
+            text: 'Нет сети — сообщения раскроются офлайн, отправка после подключения',
           ),
           Expanded(child: _screens[_currentIndex]),
         ],

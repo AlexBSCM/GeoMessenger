@@ -14,16 +14,16 @@ service cloud.firestore {
     }
 
     match /messages/{messageId} {
-      // Only the sender and the recipients may read/update a message. List
-      // queries must filter by senderId equality or recipientIds
-      // array-contains for this to be satisfiable.
+      // Only the sender and the recipients may read/update a message.
+      // recipientId (string) is the pre-group schema, kept as a fallback for
+      // documents that were not migrated yet.
       allow read: if request.auth != null &&
           (resource.data.senderId == request.auth.uid ||
-           request.auth.uid in resource.data.recipientIds);
+           request.auth.uid in resource.data.get('recipientIds', [resource.data.recipientId]));
       allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
       allow update: if request.auth != null &&
           (resource.data.senderId == request.auth.uid ||
-           request.auth.uid in resource.data.recipientIds);
+           request.auth.uid in resource.data.get('recipientIds', [resource.data.recipientId]));
       allow delete: if request.auth != null && resource.data.senderId == request.auth.uid;
     }
   }

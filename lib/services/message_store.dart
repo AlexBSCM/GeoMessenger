@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/message_model.dart';
@@ -100,6 +101,13 @@ class MessageStore extends ChangeNotifier {
       try {
         await _db.markDelivered(id);
         _pendingSync.remove(id);
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied' || e.code == 'not-found') {
+          // Permanent failure: the message was deleted or is inaccessible.
+          // Drop it, otherwise every snapshot retriggers a doomed write.
+          _pendingSync.remove(id);
+        }
+        return; // offline or permanent failure handled
       } catch (_) {
         return; // still offline
       }

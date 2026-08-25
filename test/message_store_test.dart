@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geo_messenger/models/message_model.dart';
 import 'package:geo_messenger/services/database_service.dart';
@@ -9,7 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _FakeDb implements DatabaseService {
   final controller = StreamController<List<GeoMessage>>.broadcast();
   final deliveredIds = <String>[];
+  final markDeliveredCalls = <String>[];
   bool failDeliveries = false;
+  String? failWithCode;
 
   @override
   Stream<List<GeoMessage>> getIncomingMessages(String userId) =>
@@ -17,6 +20,14 @@ class _FakeDb implements DatabaseService {
 
   @override
   Future<void> markDelivered(String messageId) async {
+    markDeliveredCalls.add(messageId);
+    if (failWithCode != null) {
+      throw FirebaseException(
+        plugin: 'firestore',
+        code: failWithCode!,
+        message: 'simulated',
+      );
+    }
     if (failDeliveries) throw Exception('offline');
     deliveredIds.add(messageId);
   }
@@ -116,6 +127,22 @@ void main() {
     await store.flushPendingSync();
     expect(store.visibleMessages.map((m) => m.id), ['m1']);
     expect(db.deliveredIds, isEmpty);
+  });
+
+  test('permanent rejection drops the doomed delivery from the queue',
+      () async {
+    db.controller.add([_msg('gone')]);
+    await Future.delayed(Duration.zero);
+    await store.revealLocally('gone');
+
+    db.failWithCode = 'permission-denied';
+    await store.flushPendingSync();
+    expect(store.visibleMessages.map((m) => m.id), ['gone']);
+
+    // No more doomed retries: the next flush does not attempt the write.
+    final callsAfterFirstFlush = List.of(db.markDeliveredCalls);
+    await store.flushPendingSync();
+    expect(db.markDeliveredCalls, callsAfterFirstFlush);
   });
 
   test('clear resets state', () async {

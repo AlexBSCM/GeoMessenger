@@ -11,6 +11,7 @@ import '../models/user_model.dart';
 import '../services/database_service.dart';
 import '../services/location_service.dart';
 import '../services/map_state_service.dart';
+import '../widgets/offline_banner.dart';
 
 class CreateMessageScreen extends StatefulWidget {
   final List<AppUser> recipients;
@@ -198,29 +199,7 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
       appBar: AppBar(title: Text(title)),
       body: Column(
         children: [
-          StreamBuilder<List<ConnectivityResult>>(
-            stream: Connectivity().onConnectivityChanged,
-            builder: (context, snapshot) {
-              final results = snapshot.data;
-              final offline = results != null &&
-                  !results.any((r) => r != ConnectivityResult.none);
-              if (!offline) return const SizedBox.shrink();
-              return const Material(
-                color: Colors.deepOrange,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      'Нет сети — отправка невозможна',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
+          const OfflineBanner(text: 'Нет сети — отправка невозможна'),
           Expanded(
             child: FlutterMap(
               mapController: _mapController,
