@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -100,32 +103,60 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
     final text = _textController.text.trim();
     if (text.isEmpty || _selectedPoint == null) return;
 
+    // Fast pre-check: with the radio off the Firestore write would hang
+    // forever waiting for a server acknowledgement.
+    final connectivity = await Connectivity().checkConnectivity();
+    if (connectivity.every((r) => r == ConnectivityResult.none)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет сети. Включите интернет и попробуйте ещё раз')),
+        );
+      }
+      return;
+    }
+
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser!;
 
     try {
       final edit = widget.editMessage;
       if (edit != null) {
-        await _db.updateMessage(
-          edit.id,
-          text: text,
-          latitude: _selectedPoint!.latitude,
-          longitude: _selectedPoint!.longitude,
-          radiusMeters: _radiusMeters,
-        );
+        await _db
+            .updateMessage(
+              edit.id,
+              text: text,
+              latitude: _selectedPoint!.latitude,
+              longitude: _selectedPoint!.longitude,
+              radiusMeters: _radiusMeters,
+            )
+            .timeout(const Duration(seconds: 15));
       } else {
-        await _db.createMessage(
-          senderId: user.uid,
-          senderName: _senderName,
-          recipientIds: widget.recipients.map((r) => r.id).toList(),
-          recipientName: widget.recipients.map((r) => r.name).join(', '),
-          text: text,
-          latitude: _selectedPoint!.latitude,
-          longitude: _selectedPoint!.longitude,
-          radiusMeters: _radiusMeters,
-        );
+        await _db
+            .createMessage(
+              senderId: user.uid,
+              senderName: _senderName,
+              recipientIds: widget.recipients.map((r) => r.id).toList(),
+              recipientName: widget.recipients.map((r) => r.name).join(', '),
+              text: text,
+              latitude: _selectedPoint!.latitude,
+              longitude: _selectedPoint!.longitude,
+              radiusMeters: _radiusMeters,
+            )
+            .timeout(const Duration(seconds: 15));
       }
       MapStateService.saveCenter(_selectedPoint!);
+    } on TimeoutException {
+      // Firestore keeps the write in its on-disk outbox and sends it when
+      // the connection is back, so the screen can be closed safely.
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Слабая сеть. Сообщение отправится автоматически при подключении'),
+          ),
+        );
+      }
+      return;
     } catch (e) {
       // Do not close the screen on failure: the message was NOT sent, and the
       // user must know (before this, failures silently looked like "sent").
@@ -167,6 +198,29 @@ class _CreateMessageScreenState extends State<CreateMessageScreen> {
       appBar: AppBar(title: Text(title)),
       body: Column(
         children: [
+          StreamBuilder<List<ConnectivityResult>>(
+            stream: Connectivity().onConnectivityChanged,
+            builder: (context, snapshot) {
+              final results = snapshot.data;
+              final offline = results != null &&
+                  !results.any((r) => r != ConnectivityResult.none);
+              if (!offline) return const SizedBox.shrink();
+              return const Material(
+                color: Colors.deepOrange,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      'Нет сети — отправка невозможна',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
           Expanded(
             child: FlutterMap(
               mapController: _mapController,
