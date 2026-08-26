@@ -53,7 +53,13 @@ class DatabaseService {
     data['longitude'] = longitude;
     data['radiusMeters'] = radiusMeters;
     data['editedAt'] = DateTime.now().toIso8601String();
-    await _firestore.collection('messages').doc(messageId).set(data);
+    // Merge: data may come from a stale local cache — a full overwrite would
+    // resurrect old fields and delete ones added server-side meanwhile
+    // (e.g. recipientIds).
+    await _firestore
+        .collection('messages')
+        .doc(messageId)
+        .set(data, SetOptions(merge: true));
   }
 
   Future<void> deleteMessage(String messageId) async {
@@ -100,7 +106,12 @@ class DatabaseService {
     final data = doc.data()!;
     data['status'] = 'delivered';
     data['deliveredAt'] = FieldValue.serverTimestamp();
-    await _firestore.collection('messages').doc(messageId).set(data);
+    // Merge for the same reason as in updateMessage: never clobber fields
+    // that are missing from a possibly stale cached copy.
+    await _firestore
+        .collection('messages')
+        .doc(messageId)
+        .set(data, SetOptions(merge: true));
   }
 
   Stream<List<Contact>> getContacts(String userId) {

@@ -15,15 +15,17 @@ service cloud.firestore {
 
     match /messages/{messageId} {
       // Only the sender and the recipients may read/update a message.
-      // recipientId (string) is the pre-group schema, kept as a fallback for
-      // documents that were not migrated yet.
+      // IMPORTANT: keep these expressions directly verifiable against the
+      // app's list queries (arrayContains on recipientIds) — wrapping them in
+      // get() with a default makes every incoming query unsatisfiable and it
+      // gets rejected wholesale.
       allow read: if request.auth != null &&
           (resource.data.senderId == request.auth.uid ||
-           request.auth.uid in resource.data.get('recipientIds', [resource.data.recipientId]));
+           request.auth.uid in resource.data.recipientIds);
       allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
       allow update: if request.auth != null &&
           (resource.data.senderId == request.auth.uid ||
-           request.auth.uid in resource.data.get('recipientIds', [resource.data.recipientId]));
+           request.auth.uid in resource.data.recipientIds);
       allow delete: if request.auth != null && resource.data.senderId == request.auth.uid;
     }
   }
