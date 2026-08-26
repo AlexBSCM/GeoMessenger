@@ -11,7 +11,9 @@ class _FakeDb implements DatabaseService {
   final controller = StreamController<List<GeoMessage>>.broadcast();
   final deliveredIds = <String>[];
   final markDeliveredCalls = <String>[];
+  final hiddenIds = <String, List<String>>{};
   bool failDeliveries = false;
+  bool failHides = false;
   String? failWithCode;
 
   @override
@@ -33,11 +35,19 @@ class _FakeDb implements DatabaseService {
   }
 
   @override
+  Future<void> hideForRecipient(String messageId, String userId) async {
+    if (failHides) throw Exception('offline');
+    hiddenIds.putIfAbsent(messageId, () => []).add(userId);
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
 }
 
-GeoMessage _msg(String id, {String status = 'pending'}) => GeoMessage(
+GeoMessage _msg(String id,
+    {String status = 'pending', List<String> deletedBy = const []}) =>
+    GeoMessage(
       id: id,
       senderId: 'sender',
       senderName: 'Sender',
@@ -47,6 +57,7 @@ GeoMessage _msg(String id, {String status = 'pending'}) => GeoMessage(
       latitude: 57.99,
       longitude: 56.26,
       status: status,
+      deletedBy: deletedBy,
     );
 
 void main() {
@@ -143,6 +154,42 @@ void main() {
     final callsAfterFirstFlush = List.of(db.markDeliveredCalls);
     await store.flushPendingSync();
     expect(db.markDeliveredCalls, callsAfterFirstFlush);
+  });
+
+test('deleteForMe hides immediately and syncs', () async {
+    db.controller.add([_msg('m1'), _msg('m2')]);
+    await Future.delayed(Duration.zero);
+
+    await store.deleteForMe('m1');
+    expect(store.pendingMessages.map((m) => m.id), ['m2']);
+    expect(db.hiddenIds['m1'], ['u1']); // pushed to Firestore
+
+    // Once the flag is in the cloud, the message stays hidden.
+    db.controller.add([
+      _msg('m1', deletedBy: ['u1']),
+      _msg('m2'),
+    ]);
+    await Future.delayed(Duration.zero);
+    expect(store.pendingMessages.map((m) => m.id), ['m2']);
+  });
+
+  test('offline delete stays hidden until synced', () async {
+    db.failHides = true;
+    db.controller.add([_msg('m1'), _msg('m2')]);
+    await Future.delayed(Duration.zero);
+
+    await store.deleteForMe('m1');
+    expect(db.hiddenIds['m1'], isNull); // not synced yet
+
+    // Cloud snapshot without the delete flag must not resurrect it.
+    db.controller.add([_msg('m1'), _msg('m2')]);
+    await Future.delayed(Duration.zero);
+    expect(store.pendingMessages.map((m) => m.id), ['m2']);
+
+    // Back online: the queued delete goes through.
+    db.failHides = false;
+    await store.flushPendingDeletes();
+    expect(db.hiddenIds['m1'], ['u1']);
   });
 
   test('clear resets state', () async {

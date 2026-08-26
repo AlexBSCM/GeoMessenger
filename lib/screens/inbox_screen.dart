@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../models/message_model.dart';
 import '../services/message_store.dart';
 
 class InboxScreen extends StatefulWidget {
@@ -10,6 +11,22 @@ class InboxScreen extends StatefulWidget {
 }
 
 class _InboxScreenState extends State<InboxScreen> {
+  Future<void> _deleteMessage(GeoMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить сообщение?'),
+        content: const Text('Оно исчезнет из вашего списка, но останется у отправителя.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await MessageStore.instance.deleteForMe(message.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -44,9 +61,13 @@ class _InboxScreenState extends State<InboxScreen> {
                   leading: const Icon(Icons.check_circle, color: Colors.green),
                   title: Text(msg.senderName),
                   subtitle: Text(msg.text),
-                  trailing: const Text(
-                    'Доставлено',
-                    style: TextStyle(color: Colors.green, fontSize: 12),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'delete') _deleteMessage(msg);
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'delete', child: Text('Удалить')),
+                    ],
                   ),
                 ),
               );

@@ -13,6 +13,7 @@ class GeoMessage {
   final DateTime createdAt;
   final DateTime? deliveredAt;
   final String status;
+  final List<String> deletedBy;
 
   GeoMessage({
     required this.id,
@@ -27,7 +28,9 @@ class GeoMessage {
     DateTime? createdAt,
     this.deliveredAt,
     this.status = 'pending',
-  }) : createdAt = createdAt ?? DateTime.now();
+    List<String>? deletedBy,
+  })  : createdAt = createdAt ?? DateTime.now(),
+        deletedBy = deletedBy ?? const [];
 
 GeoMessage copyWith({
     String? status,
@@ -63,6 +66,7 @@ GeoMessage copyWith({
         'createdAt': createdAt.toIso8601String(),
         'deliveredAt': deliveredAt?.toIso8601String(),
         'status': status,
+        'deletedBy': deletedBy,
       };
 
   factory GeoMessage.fromMap(Map<String, dynamic> map) {
@@ -82,6 +86,7 @@ GeoMessage copyWith({
         createdAt: _parseDate(map['createdAt']),
         deliveredAt: map['deliveredAt'] == null ? null : _parseDate(map['deliveredAt']),
         status: map['status'] as String? ?? 'pending',
+        deletedBy: (map['deletedBy'] as List?)?.cast<String>() ?? const [],
       );
   }
 

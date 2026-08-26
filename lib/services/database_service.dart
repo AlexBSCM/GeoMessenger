@@ -114,6 +114,22 @@ class DatabaseService {
         .set(data, SetOptions(merge: true));
   }
 
+  /// Recipient-side soft delete: records the user in deletedBy so the message
+/// no longer shows up in their inbox, while the sender still sees it.
+  Future<void> hideForRecipient(String messageId, String userId) async {
+    // Full write with merge: masked updates are rejected by the rules.
+    final doc = await _firestore.collection('messages').doc(messageId).get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    final deletedBy = (data['deletedBy'] as List?)?.cast<String>() ?? <String>[];
+    if (!deletedBy.contains(userId)) deletedBy.add(userId);
+    data['deletedBy'] = deletedBy;
+    await _firestore
+        .collection('messages')
+        .doc(messageId)
+        .set(data, SetOptions(merge: true));
+  }
+
   Stream<List<Contact>> getContacts(String userId) {
     return _firestore
         .collection('contacts')

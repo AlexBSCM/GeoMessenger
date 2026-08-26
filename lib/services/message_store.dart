@@ -25,6 +25,7 @@ class MessageStore extends ChangeNotifier {
   StreamSubscription<List<GeoMessage>>? _sub;
   final Map<String, GeoMessage> _messages = {};
   final Set<String> _pendingSync = {}; // delivered locally, not yet in Firestore
+  final Set<String> _pendingDeletes = {}; // hidden locally, not yet in Firestore
 
   String get _cacheKey => 'msg_cache_$_userId';
 
@@ -57,11 +58,18 @@ class MessageStore extends ChangeNotifier {
     _userId = null;
     _messages.clear();
     _pendingSync.clear();
+    _pendingDeletes.clear();
     notifyListeners();
   }
 
   void _applyCloud(List<GeoMessage> cloud) {
     for (final m in cloud) {
+      final hidden = (_userId != null && m.deletedBy.contains(_userId)) ||
+          _pendingDeletes.contains(m.id);
+      if (hidden) {
+        _messages.remove(m.id);
+        continue;
+      }
       final existing = _messages[m.id];
       if (existing != null &&
           existing.status == 'delivered' &&
@@ -74,6 +82,16 @@ class MessageStore extends ChangeNotifier {
     notifyListeners();
     _persist();
     flushPendingSync();
+  }
+
+  /// Recipient-side delete: hides the message immediately (works offline),
+  /// the cloud update is pushed when a connection is available.
+  Future<void> deleteForMe(String messageId) async {
+    _messages.remove(messageId);
+    _pendingDeletes.add(messageId);
+    notifyListeners();
+    await _persist();
+    flushPendingDeletes();
   }
 
   /// Marks a pending message as revealed locally (works offline). The delivery
@@ -115,6 +133,25 @@ class MessageStore extends ChangeNotifier {
     await _persist();
   }
 
+  /// Pushes queued recipient-deletes to Firestore (best effort, online only).
+  Future<void> flushPendingDeletes() async {
+    if (_pendingDeletes.isEmpty) return;
+    for (final id in _pendingDeletes.toList()) {
+      try {
+        await _db.hideForRecipient(id, _userId!);
+        _pendingDeletes.remove(id);
+      } on FirebaseException catch (e) {
+        if (e.code == 'permission-denied' || e.code == 'not-found') {
+          _pendingDeletes.remove(id);
+        }
+        return;
+      } catch (_) {
+        return; // still offline
+      }
+    }
+    await _persist();
+  }
+
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_cacheKey);
@@ -128,6 +165,9 @@ class MessageStore extends ChangeNotifier {
       _pendingSync
         ..clear()
         ..addAll((data['pendingSync'] as List? ?? []).cast<String>());
+      _pendingDeletes
+        ..clear()
+        ..addAll((data['pendingDeletes'] as List? ?? []).cast<String>());
     } catch (_) {
       // Corrupt cache — ignore.
     }
@@ -141,6 +181,7 @@ class MessageStore extends ChangeNotifier {
       jsonEncode({
         'messages': _messages.values.map((m) => m.toMap()).toList(),
         'pendingSync': _pendingSync.toList(),
+        'pendingDeletes': _pendingDeletes.toList(),
       }),
     );
   }

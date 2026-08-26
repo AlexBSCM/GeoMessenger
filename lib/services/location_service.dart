@@ -9,17 +9,18 @@ class LocationService {
   static StreamController<GeoMessage>? _controller;
   static bool _monitoring = false;
   static bool _stopped = false;
+  static bool _requestIfDenied = true;
 
   static const _streamInterval = Duration(seconds: 2);
   static const _fixTimeout = Duration(seconds: 8);
   static const _retryDelay = Duration(seconds: 5);
 
-  Future<bool> requestPermission() async {
+  Future<bool> requestPermission({bool request = true}) async {
     // Note: Geolocator.isLocationServiceEnabled() is intentionally not used:
     // it hardcodes the GMS/FusedLocation path on Android and crashes on devices
     // with incompatible Google Play Services (e.g. some Huawei tablets).
     var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
+    if (permission == LocationPermission.denied && request) {
       permission = await Geolocator.requestPermission();
     }
     return permission == LocationPermission.always || permission == LocationPermission.whileInUse;
@@ -50,12 +51,18 @@ class LocationService {
     }
   }
 
-  Stream<GeoMessage> startGeofenceMonitoring(Future<List<GeoMessage>> Function() fetcher) {
+  Stream<GeoMessage> startGeofenceMonitoring(
+    Future<List<GeoMessage>> Function() fetcher, {
+    // The service isolate must not raise permission dialogs from the
+    // background — it only monitors while permission is already granted.
+    bool requestPermissionIfDenied = true,
+  }) {
     if (_monitoring) {
       return _controller!.stream;
     }
     _monitoring = true;
     _stopped = false;
+    _requestIfDenied = requestPermissionIfDenied;
     _controller = StreamController<GeoMessage>.broadcast();
     _runLoop(fetcher);
     return _controller!.stream;
@@ -74,7 +81,7 @@ class LocationService {
   // some Huawei tablets) fall back to the Android LocationManager stream.
   Future<void> _runLoop(Future<List<GeoMessage>> Function() fetcher) async {
     while (!_stopped) {
-      final hasPermission = await requestPermission();
+      final hasPermission = await requestPermission(request: _requestIfDenied);
       if (!hasPermission) {
         await Future.delayed(_retryDelay);
         continue;

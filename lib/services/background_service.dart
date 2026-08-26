@@ -132,7 +132,9 @@ void onStart(ServiceInstance service) async {
     await MessageStore.instance.init(userId);
     LocationService.instance
         .startGeofenceMonitoring(
-            () async => MessageStore.instance.pendingMessages)
+          () async => MessageStore.instance.pendingMessages,
+          requestPermissionIfDenied: false,
+        )
         .listen((message) => GeofenceMonitor.reveal(message));
   }
 
