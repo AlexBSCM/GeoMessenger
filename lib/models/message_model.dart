@@ -90,6 +90,16 @@ GeoMessage copyWith({
       );
   }
 
+  /// Null-safe variant: one malformed document in a query result must never
+  /// crash the whole stream/list — it is skipped instead.
+  static GeoMessage? tryParse(Map<String, dynamic> map) {
+    try {
+      return GeoMessage.fromMap(map);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Accepts Firestore Timestamps, ISO strings and null (pending server
   /// timestamps) so one inconsistent document cannot crash a whole stream.
   static DateTime _parseDate(Object? value) {

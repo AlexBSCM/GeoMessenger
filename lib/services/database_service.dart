@@ -44,22 +44,15 @@ class DatabaseService {
     required double longitude,
     required double radiusMeters,
   }) async {
-    // Full-document write (see markDelivered for the reason).
-    final doc = await _firestore.collection('messages').doc(messageId).get();
-    if (!doc.exists) return;
-    final data = doc.data()!;
-    data['text'] = text;
-    data['latitude'] = latitude;
-    data['longitude'] = longitude;
-    data['radiusMeters'] = radiusMeters;
-    data['editedAt'] = DateTime.now().toIso8601String();
-    // Merge: data may come from a stale local cache — a full overwrite would
-    // resurrect old fields and delete ones added server-side meanwhile
-    // (e.g. recipientIds).
-    await _firestore
-        .collection('messages')
-        .doc(messageId)
-        .set(data, SetOptions(merge: true));
+    // Masked atomic update: only the edited fields are touched, nothing can
+    // be clobbered by a stale local copy.
+    await _firestore.collection('messages').doc(messageId).update({
+      'text': text,
+      'latitude': latitude,
+      'longitude': longitude,
+      'radiusMeters': radiusMeters,
+      'editedAt': DateTime.now().toIso8601String(),
+    });
   }
 
   Future<void> deleteMessage(String messageId) async {
@@ -70,12 +63,15 @@ class DatabaseService {
     // No orderBy: the collection may contain documents with inconsistent
     // createdAt types (string vs Timestamp) or missing the field, which makes
     // any Firestore orderBy query fail for the whole stream. Sort in memory.
+    // Documents are filtered individually: one malformed document must not
+    // break the whole incoming stream.
     return _firestore
         .collection('messages')
         .where('recipientIds', arrayContains: userId)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => GeoMessage.fromMap(doc.data()))
+            .map((doc) => GeoMessage.tryParse(doc.data()))
+            .whereType<GeoMessage>()
             .toList());
   }
 
@@ -85,7 +81,8 @@ class DatabaseService {
         .where('senderId', isEqualTo: userId)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => GeoMessage.fromMap(doc.data()))
+            .map((doc) => GeoMessage.tryParse(doc.data()))
+            .whereType<GeoMessage>()
             .toList());
   }
 
@@ -95,39 +92,28 @@ class DatabaseService {
         .where('recipientIds', arrayContains: userId)
         .where('status', isEqualTo: 'pending')
         .get();
-    return snapshot.docs.map((doc) => GeoMessage.fromMap(doc.data())).toList();
+    return snapshot.docs
+        .map((doc) => GeoMessage.tryParse(doc.data()))
+        .whereType<GeoMessage>()
+        .toList();
   }
 
   Future<void> markDelivered(String messageId) async {
-    // Full-document write: masked updates (update()) are rejected by the
-    // Firestore rules for this project, while a full write is allowed.
-    final doc = await _firestore.collection('messages').doc(messageId).get();
-    if (!doc.exists) return;
-    final data = doc.data()!;
-    data['status'] = 'delivered';
-    data['deliveredAt'] = FieldValue.serverTimestamp();
-    // Merge for the same reason as in updateMessage: never clobber fields
-    // that are missing from a possibly stale cached copy.
-    await _firestore
-        .collection('messages')
-        .doc(messageId)
-        .set(data, SetOptions(merge: true));
+    // Masked update: atomic, no read-modify-write race, no risk of clobbering
+    // fields with a stale cached copy. Allowed by rules since every message
+    // now carries recipientIds (legacy docs were migrated).
+    await _firestore.collection('messages').doc(messageId).update({
+      'status': 'delivered',
+      'deliveredAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Recipient-side soft delete: records the user in deletedBy so the message
-/// no longer shows up in their inbox, while the sender still sees it.
+  /// no longer shows up in their inbox, while the sender still sees it.
   Future<void> hideForRecipient(String messageId, String userId) async {
-    // Full write with merge: masked updates are rejected by the rules.
-    final doc = await _firestore.collection('messages').doc(messageId).get();
-    if (!doc.exists) return;
-    final data = doc.data()!;
-    final deletedBy = (data['deletedBy'] as List?)?.cast<String>() ?? <String>[];
-    if (!deletedBy.contains(userId)) deletedBy.add(userId);
-    data['deletedBy'] = deletedBy;
-    await _firestore
-        .collection('messages')
-        .doc(messageId)
-        .set(data, SetOptions(merge: true));
+    await _firestore.collection('messages').doc(messageId).update({
+      'deletedBy': FieldValue.arrayUnion([userId]),
+    });
   }
 
   Stream<List<Contact>> getContacts(String userId) {
