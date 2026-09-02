@@ -63,6 +63,15 @@ class MessageStore extends ChangeNotifier {
   }
 
   void _applyCloud(List<GeoMessage> cloud) {
+    // The snapshot is authoritative: it lists every incoming message that
+    // still exists in the cloud. Anything cached locally but missing here was
+    // deleted by its sender — drop it (and its queued syncs), otherwise the
+    // geofence monitor keeps chasing a ghost document forever.
+    final cloudIds = cloud.map((m) => m.id).toSet();
+    _messages.removeWhere((id, _) => !cloudIds.contains(id));
+    _pendingSync.removeWhere((id) => !cloudIds.contains(id));
+    _pendingDeletes.removeWhere((id) => !cloudIds.contains(id));
+
     for (final m in cloud) {
       final hidden = (_userId != null && m.deletedBy.contains(_userId)) ||
           _pendingDeletes.contains(m.id);
@@ -96,13 +105,16 @@ class MessageStore extends ChangeNotifier {
 
   /// Marks a pending message as revealed locally (works offline). The delivery
   /// is queued and pushed to Firestore as soon as a connection is available.
-  Future<void> revealLocally(String messageId) async {
+  /// Returns true only if the message actually transitioned to delivered —
+  /// callers use this to avoid duplicate notifications and redundant writes.
+  Future<bool> revealLocally(String messageId) async {
     final m = _messages[messageId];
-    if (m == null || m.status == 'delivered') return;
+    if (m == null || m.status == 'delivered') return false;
     _messages[messageId] = m.copyWith(status: 'delivered');
     _pendingSync.add(messageId);
     notifyListeners();
     await _persist();
+    return true;
   }
 
   /// Delivery was written to Firestore successfully.
@@ -115,41 +127,52 @@ class MessageStore extends ChangeNotifier {
   /// Pushes queued local deliveries to Firestore (best effort, online only).
   Future<void> flushPendingSync() async {
     if (_pendingSync.isEmpty) return;
+    var dirty = false;
     for (final id in _pendingSync.toList()) {
       try {
         await _db.markDelivered(id);
         _pendingSync.remove(id);
+        dirty = true;
       } on FirebaseException catch (e) {
         if (e.code == 'permission-denied' || e.code == 'not-found') {
           // Permanent failure: the message was deleted or is inaccessible.
-          // Drop it, otherwise every snapshot retriggers a doomed write.
+          // Drop it from the queue AND persist the drop, otherwise every
+          // restart requeues a doomed write that loops on PERMISSION_DENIED.
+          // The message stays in _messages (already delivered locally) —
+          // _applyCloud will prune it when the cloud snapshot confirms it.
           _pendingSync.remove(id);
+          dirty = true;
+          await _persist();
         }
         return; // offline or permanent failure handled
       } catch (_) {
         return; // still offline
       }
     }
-    await _persist();
+    if (dirty) await _persist();
   }
 
   /// Pushes queued recipient-deletes to Firestore (best effort, online only).
   Future<void> flushPendingDeletes() async {
     if (_pendingDeletes.isEmpty) return;
+    var dirty = false;
     for (final id in _pendingDeletes.toList()) {
       try {
         await _db.hideForRecipient(id, _userId!);
         _pendingDeletes.remove(id);
+        dirty = true;
       } on FirebaseException catch (e) {
         if (e.code == 'permission-denied' || e.code == 'not-found') {
           _pendingDeletes.remove(id);
+          dirty = true;
+          await _persist();
         }
         return;
       } catch (_) {
         return; // still offline
       }
     }
-    await _persist();
+    if (dirty) await _persist();
   }
 
   Future<void> _load() async {

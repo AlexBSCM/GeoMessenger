@@ -11,7 +11,11 @@ class GeofenceMonitor {
   GeofenceMonitor._();
 
   static Future<void> reveal(GeoMessage message) async {
-    await MessageStore.instance.revealLocally(message.id);
+    // Only the transition pending -> delivered notifies and syncs. Without
+    // this guard, every position update inside a zone (every 2 s) would fire
+    // a fresh notification and a fresh Firestore write for the same message.
+    final changed = await MessageStore.instance.revealLocally(message.id);
+    if (!changed) return;
     await NotificationService().showGeoMessageNotification(message);
     try {
       await DatabaseService().markDelivered(message.id);

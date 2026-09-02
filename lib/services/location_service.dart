@@ -126,6 +126,12 @@ class LocationService {
           sink.addError(TimeoutException('position stream stalled')),
     );
 
+    // Emit each pending message at most once per stream session: the monitor
+    // is inside its zone, so firing on every 2 s position update would reveal,
+    // notify and write to Firestore the same message over and over. Re-emitting
+    // is only allowed after the stream is restarted (e.g. it stalled).
+    final emitted = <String>{};
+
     await for (final position in stream) {
       if (_stopped) break;
 
@@ -141,7 +147,7 @@ class LocationService {
             message.longitude,
           );
 
-          if (distance <= message.radiusMeters) {
+          if (distance <= message.radiusMeters && emitted.add(message.id)) {
             _controller!.add(message);
           }
         }

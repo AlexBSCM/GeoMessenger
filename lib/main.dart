@@ -25,9 +25,10 @@ import 'screens/sent_screen.dart';
 import 'screens/map_screen.dart';
 import 'widgets/offline_banner.dart';
 
-const bool useEmulator = bool.fromEnvironment('USE_EMULATOR', defaultValue: true);
+const bool useEmulator = bool.fromEnvironment('USE_EMULATOR', defaultValue: false);
 const String emulatorHost = String.fromEnvironment('EMULATOR_HOST', defaultValue: 'localhost');
 const _activeUserKey = 'activeUserId';
+const _persistenceClearedKey = 'persistenceClearedV2';
 
 Timer? _heartbeatTimer;
 
@@ -38,6 +39,20 @@ void _sendHeartbeat() {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: firebaseOptions);
+
+  // One-time purge of the Firestore SDK local write queue. Older app versions
+  // could leave a doomed write (e.g. to a document the sender deleted) in the
+  // queue; the SDK then replays it on every reconnect, producing an endless
+  // PERMISSION_DENIED loop that also starves all other writes.
+  final bootPrefs = await SharedPreferences.getInstance();
+  if (!(bootPrefs.getBool(_persistenceClearedKey) ?? false)) {
+    try {
+      await FirebaseFirestore.instance.clearPersistence();
+    } catch (_) {
+      // Not supported / already in use — nothing to purge.
+    }
+    await bootPrefs.setBool(_persistenceClearedKey, true);
+  }
 
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
   PlatformDispatcher.instance.onError = (error, stack) {
